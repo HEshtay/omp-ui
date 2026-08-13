@@ -1,0 +1,494 @@
+/*
+ * Markdown prose, code fences and diagrams.
+ *
+ * Highlighting is mapped onto omp's syntax roles instead of shipping one of
+ * highlight.js' themes: a bundled theme would fight whatever VS Code theme is
+ * active, while these tokens sit on top of it the same way `theme.css` does.
+ */
+
+.md,
+.md-fence {
+	--syn-comment: #6e6974;
+	--syn-keyword: #945ff9;
+	--syn-function: #e4b33f;
+	--syn-variable: #5ad8e5;
+	--syn-string: #68ca80;
+	--syn-number: #ed4abf;
+	--syn-type: #b281d6;
+}
+
+/* The dark-tuned roles wash out on white; keep the hue, drop the luminance. */
+body.vscode-light .md,
+body.vscode-light .md-fence,
+body.vscode-high-contrast-light .md,
+body.vscode-high-contrast-light .md-fence {
+	--syn-comment: #6b6674;
+	--syn-keyword: #6f2ad1;
+	--syn-function: #97650a;
+	--syn-variable: #0b7c8a;
+	--syn-string: #1c7a3c;
+	--syn-number: #bf1490;
+	--syn-type: #7a3fb0;
+}
+
+.md {
+	line-height: 1.6;
+	/* Model output contains unbreakable paths, hashes and URLs. */
+	overflow-wrap: anywhere;
+}
+
+/* Outer rhythm belongs to whoever placed the block. */
+.md > :first-child {
+	margin-top: 0;
+}
+
+.md > :last-child {
+	margin-bottom: 0;
+}
+
+/* ------------------------------------------------------------------ blocks */
+
+.md p {
+	margin: 0 0 8px;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+	margin: 14px 0 6px;
+	line-height: 1.3;
+	font-weight: 600;
+}
+
+.md h1 {
+	font-size: 1.3em;
+}
+
+.md h2 {
+	font-size: 1.18em;
+}
+
+.md h3 {
+	font-size: 1.08em;
+}
+
+.md h4,
+.md h5,
+.md h6 {
+	font-size: 1em;
+	color: var(--fg-muted);
+}
+
+.md h1,
+.md h2 {
+	padding-bottom: 3px;
+	border-bottom: 1px solid var(--border-muted);
+}
+
+.md ul,
+.md ol {
+	margin: 0 0 8px;
+	padding-left: 20px;
+}
+
+.md li {
+	margin: 1px 0;
+}
+
+.md li > ul,
+.md li > ol {
+	margin-bottom: 0;
+}
+
+.md blockquote {
+	margin: 0 0 8px;
+	padding: 2px 0 2px 10px;
+	border-left: 2px solid var(--accent-muted);
+	color: var(--fg-muted);
+}
+
+.md hr {
+	margin: 12px 0;
+	border: 0;
+	border-top: 1px solid var(--border-muted);
+}
+
+.md del {
+	color: var(--fg-faint);
+}
+
+.md mark {
+	background: var(--accent-muted);
+	color: inherit;
+	border-radius: 2px;
+	padding: 0 2px;
+}
+
+.md kbd {
+	border: 1px solid var(--border-strong);
+	border-bottom-width: 2px;
+	border-radius: var(--radius-sm);
+	padding: 0 4px;
+	background: var(--bg-inset);
+}
+
+.md sup,
+.md sub {
+	line-height: 0;
+}
+
+.md .footnotes {
+	margin-top: 12px;
+	padding-top: 6px;
+	border-top: 1px solid var(--border-muted);
+	font-size: calc(var(--font-size) - 1px);
+	color: var(--fg-muted);
+}
+
+/* --------------------------------------------------------------- checklist */
+
+.md .contains-task-list {
+	padding-left: 2px;
+}
+
+.md .task-list-item {
+	list-style: none;
+}
+
+.md .task-list-item input {
+	margin: 0 6px 0 0;
+	vertical-align: -1px;
+	accent-color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ inline */
+
+/*
+ * Structural, not prop-driven: react-markdown 10 no longer flags inline code,
+ * and `pre > code` is the definition of a fence regardless of language.
+ */
+.md :not(pre) > code.md-code {
+	background: color-mix(in srgb, var(--fg) 8%, transparent);
+	border: 1px solid var(--border-muted);
+	border-radius: var(--radius-sm);
+	padding: 0 4px;
+	white-space: break-spaces;
+}
+
+.md a code.md-code {
+	color: inherit;
+}
+
+.md-img {
+	max-width: 100%;
+	height: auto;
+	border-radius: var(--radius-sm);
+	background: var(--bg-inset);
+}
+
+/* ------------------------------------------------------------------ tables */
+
+/* omp keeps tables square while everything else is rounded. */
+.md-table-wrap {
+	margin: 0 0 10px;
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	background: var(--bg-inset);
+}
+
+.md-table {
+	border-collapse: collapse;
+	width: 100%;
+	font-size: calc(var(--font-size) - 1px);
+}
+
+.md-table th,
+.md-table td {
+	padding: 3px 8px;
+	border-right: 1px solid var(--border-muted);
+	border-bottom: 1px solid var(--border-muted);
+	text-align: left;
+	vertical-align: top;
+	overflow-wrap: anywhere;
+}
+
+.md-table tr > :last-child {
+	border-right: 0;
+}
+
+.md-table tbody tr:last-child > * {
+	border-bottom: 0;
+}
+
+.md-table thead th {
+	background: color-mix(in srgb, var(--fg) 6%, transparent);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ fences */
+
+.md-fence {
+	--md-fence-line: calc(var(--font-size-mono) * 1.55);
+	margin: 0 0 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-inset);
+	overflow: hidden;
+}
+
+.md-fence-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 24px;
+	padding: 1px 4px 1px 10px;
+	border-bottom: 1px solid var(--border-muted);
+	background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.md-fence-lang {
+	max-width: 45%;
+	font-size: 10px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--fg-faint);
+}
+
+.md-fence-count {
+	font-size: 10px;
+	white-space: nowrap;
+}
+
+.md-fence-pre {
+	margin: 0;
+	padding: 8px 10px;
+	line-height: 1.55;
+	white-space: pre;
+	tab-size: 4;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.md-fence-pre.is-clipped {
+	mask-image: linear-gradient(to bottom, #000 76%, transparent 100%);
+}
+
+.md-fence-pre code {
+	font: inherit;
+	background: none;
+	border: 0;
+	padding: 0;
+	white-space: inherit;
+}
+
+.md-fence-more {
+	display: flex;
+	justify-content: center;
+	width: 100%;
+	border-top: 1px solid var(--border-muted);
+	border-radius: 0;
+	font-size: 11px;
+}
+
+/* Raw source: fence fallback, mermaid failure, markdown failure. */
+.md-plain-pre {
+	margin: 0;
+	padding: 8px 10px;
+	line-height: 1.55;
+	white-space: pre;
+	overflow-x: auto;
+	background: var(--bg-inset);
+	border-radius: var(--radius);
+}
+
+/* ---------------------------------------------------------------- mermaid */
+
+.md-mermaid {
+	margin: 0 0 10px;
+	padding: 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-inset);
+	overflow-x: auto;
+	text-align: center;
+}
+
+.md-mermaid svg {
+	max-width: 100%;
+	height: auto;
+}
+
+.md-mermaid-pending {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0 0 10px;
+	padding: 6px 10px;
+	border: 1px solid var(--border-muted);
+	border-radius: var(--radius);
+	font-size: calc(var(--font-size) - 1px);
+}
+
+.md-mermaid-failed {
+	margin: 0 0 10px;
+	padding: 4px;
+	border: 1px solid var(--border-muted);
+	border-radius: var(--radius);
+}
+
+.md-mermaid-failed .faint {
+	padding: 4px 6px 2px;
+	font-size: 11px;
+}
+
+/* ------------------------------------------------------------------- math */
+
+.md .katex {
+	font-size: 1.05em;
+}
+
+.md .katex-display {
+	margin: 8px 0;
+	padding: 2px 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.md .katex-error {
+	color: var(--err);
+}
+
+/* --------------------------------------------------------------- compact */
+
+/* Inside tool cards and dialogs the vertical rhythm has to shrink. */
+.md-compact {
+	line-height: 1.5;
+}
+
+.md-compact p,
+.md-compact ul,
+.md-compact ol,
+.md-compact blockquote {
+	margin-bottom: 5px;
+}
+
+.md-compact h1,
+.md-compact h2,
+.md-compact h3,
+.md-compact h4,
+.md-compact h5,
+.md-compact h6 {
+	margin: 8px 0 4px;
+	font-size: 1em;
+	border-bottom: 0;
+	padding-bottom: 0;
+}
+
+.md-compact hr {
+	margin: 8px 0;
+}
+
+.md-compact .md-fence,
+.md-compact .md-table-wrap,
+.md-compact .md-mermaid,
+.md-compact .md-mermaid-pending,
+.md-compact .md-mermaid-failed {
+	margin-bottom: 6px;
+}
+
+.md-compact .md-fence-pre,
+.md-compact .md-plain-pre {
+	padding: 6px 8px;
+}
+
+/* ------------------------------------------------------- syntax highlight */
+
+.md .hljs {
+	color: inherit;
+	background: transparent;
+}
+
+.md .hljs-comment,
+.md .hljs-quote {
+	color: var(--syn-comment);
+	font-style: italic;
+}
+
+.md .hljs-keyword,
+.md .hljs-selector-tag,
+.md .hljs-literal,
+.md .hljs-subst,
+.md .hljs-doctag,
+.md .hljs-operator,
+.md .hljs-meta .hljs-keyword {
+	color: var(--syn-keyword);
+}
+
+.md .hljs-title,
+.md .hljs-title.function_,
+.md .hljs-section,
+.md .hljs-name,
+.md .hljs-selector-id,
+.md .hljs-selector-class,
+.md .hljs-selector-pseudo {
+	color: var(--syn-function);
+}
+
+.md .hljs-variable,
+.md .hljs-template-variable,
+.md .hljs-attr,
+.md .hljs-attribute,
+.md .hljs-property,
+.md .hljs-params,
+.md .hljs-selector-attr {
+	color: var(--syn-variable);
+}
+
+.md .hljs-string,
+.md .hljs-regexp,
+.md .hljs-char.escape_,
+.md .hljs-template-tag,
+.md .hljs-addition {
+	color: var(--syn-string);
+}
+
+.md .hljs-number,
+.md .hljs-symbol,
+.md .hljs-bullet,
+.md .hljs-meta,
+.md .hljs-link {
+	color: var(--syn-number);
+}
+
+.md .hljs-type,
+.md .hljs-built_in,
+.md .hljs-title.class_,
+.md .hljs-class .hljs-title,
+.md .hljs-tag {
+	color: var(--syn-type);
+}
+
+.md .hljs-deletion {
+	color: var(--err);
+}
+
+.md .hljs-punctuation,
+.md .hljs-formula {
+	color: var(--fg-muted);
+}
+
+.md .hljs-emphasis {
+	font-style: italic;
+}
+
+.md .hljs-strong {
+	font-weight: 600;
+}
+
+.md .hljs-link {
+	text-decoration: underline;
+}

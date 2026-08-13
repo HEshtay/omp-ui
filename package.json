@@ -1,0 +1,344 @@
+{
+  "name": "omp-ui",
+  "displayName": "OMP",
+  "description": "A graphical front-end for the omp coding agent, wired into VS Code.",
+  "version": "0.1.0",
+  "publisher": "omp",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HEshtay/omp-ui.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HEshtay/omp-ui/issues"
+  },
+  "homepage": "https://github.com/HEshtay/omp-ui#readme",
+  "engines": {
+    "vscode": "^1.104.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "omp",
+    "oh my pi",
+    "coding agent",
+    "ai"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "omp",
+          "title": "OMP",
+          "icon": "media/omp.svg"
+        }
+      ]
+    },
+    "views": {
+      "omp": [
+        {
+          "id": "omp.chatView",
+          "name": "Chat",
+          "type": "webview",
+          "icon": "media/omp.svg",
+          "contextualTitle": "OMP"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "omp.openChat",
+        "title": "Open Chat in Editor",
+        "category": "OMP",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "omp.focusChat",
+        "title": "Focus Chat",
+        "category": "OMP"
+      },
+      {
+        "command": "omp.newSession",
+        "title": "New Session",
+        "category": "OMP",
+        "icon": "$(add)"
+      },
+      {
+        "command": "omp.resumeSession",
+        "title": "Resume Session...",
+        "category": "OMP",
+        "icon": "$(history)"
+      },
+      {
+        "command": "omp.abort",
+        "title": "Abort Current Turn",
+        "category": "OMP",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "omp.selectModel",
+        "title": "Select Model...",
+        "category": "OMP"
+      },
+      {
+        "command": "omp.loginProvider",
+        "title": "Sign in to Provider...",
+        "category": "OMP"
+      },
+      {
+        "command": "omp.compact",
+        "title": "Compact Conversation",
+        "category": "OMP"
+      },
+      {
+        "command": "omp.exportHtml",
+        "title": "Export Session to HTML",
+        "category": "OMP"
+      },
+      {
+        "command": "omp.restartAgent",
+        "title": "Restart Agent Process",
+        "category": "OMP",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "omp.showLog",
+        "title": "Show Log",
+        "category": "OMP",
+        "icon": "$(output)"
+      },
+      {
+        "command": "omp.addSelectionToChat",
+        "title": "Add Selection to Chat",
+        "category": "OMP"
+      },
+      {
+        "command": "omp.addProjectFolder",
+        "title": "Add Project Folder...",
+        "category": "OMP",
+        "icon": "$(folder-add)"
+      },
+      {
+        "command": "omp.resetSession",
+        "title": "Reset Conversation",
+        "category": "OMP"
+      },
+      {
+        "command": "omp.closeSession",
+        "title": "Close Session",
+        "category": "OMP"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "omp.newSession",
+          "when": "view == omp.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "omp.resumeSession",
+          "when": "view == omp.chatView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "omp.openChat",
+          "when": "view == omp.chatView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "omp.addProjectFolder",
+          "when": "view == omp.chatView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "omp.restartAgent",
+          "when": "view == omp.chatView",
+          "group": "1_agent@1"
+        },
+        {
+          "command": "omp.compact",
+          "when": "view == omp.chatView",
+          "group": "1_agent@2"
+        },
+        {
+          "command": "omp.exportHtml",
+          "when": "view == omp.chatView",
+          "group": "1_agent@3"
+        },
+        {
+          "command": "omp.resetSession",
+          "when": "view == omp.chatView",
+          "group": "1_agent@4"
+        },
+        {
+          "command": "omp.closeSession",
+          "when": "view == omp.chatView",
+          "group": "1_agent@5"
+        },
+        {
+          "command": "omp.showLog",
+          "when": "view == omp.chatView",
+          "group": "9_debug@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "omp.addSelectionToChat",
+          "when": "editorHasSelection",
+          "group": "omp@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "omp.focusChat",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "omp.focusChat",
+        "key": "ctrl+shift+alt+o",
+        "mac": "cmd+shift+alt+o"
+      },
+      {
+        "command": "omp.addSelectionToChat",
+        "key": "ctrl+shift+alt+l",
+        "mac": "cmd+shift+alt+l",
+        "when": "editorHasSelection"
+      }
+    ],
+    "configuration": {
+      "title": "OMP",
+      "properties": {
+        "omp.executablePath": {
+          "type": "string",
+          "default": "omp",
+          "markdownDescription": "Path to the `omp` executable. Resolved on `PATH` when not absolute."
+        },
+        "omp.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra CLI arguments appended to `omp --mode rpc-ui` (for example `[\"--advisor\"]`)."
+        },
+        "omp.model": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Model pattern passed as `--model` on startup. Empty uses omp's own default."
+        },
+        "omp.thinkingLevel": {
+          "type": "string",
+          "enum": [
+            "",
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+            "auto"
+          ],
+          "default": "",
+          "description": "Thinking level passed as --thinking on startup. Empty uses omp's own default."
+        },
+        "omp.approvalMode": {
+          "type": "string",
+          "enum": [
+            "",
+            "always-ask",
+            "write",
+            "yolo"
+          ],
+          "enumDescriptions": [
+            "Use omp's own configured default, which is 'yolo' unless you set tools.approvalMode in your omp config.",
+            "Ask before every write and command.",
+            "Ask before commands only.",
+            "Auto-approve everything."
+          ],
+          "default": "",
+          "markdownDescription": "Tool approval mode, passed as `--approval-mode` on startup. omp itself defaults to `yolo`, so approval prompts only appear if you pick `write` or `always-ask` here (or set `tools.approvalMode` in your omp config)."
+        },
+        "omp.subagentSubscription": {
+          "type": "string",
+          "enum": [
+            "off",
+            "progress",
+            "events"
+          ],
+          "default": "progress",
+          "description": "How much subagent detail to stream into the UI."
+        },
+        "omp.showThinking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render the model's thinking blocks."
+        },
+        "omp.autoScroll": {
+          "type": "boolean",
+          "default": true,
+          "description": "Follow the bottom of the transcript while the agent streams."
+        },
+        "omp.sendKeybinding": {
+          "type": "string",
+          "enum": [
+            "enter",
+            "ctrl+enter"
+          ],
+          "default": "enter",
+          "markdownDescription": "Which key sends a message. With `enter`, use `Shift+Enter` for a newline."
+        },
+        "omp.followActiveEditor": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Automatically switch the OMP chat to the project folder containing the active editor."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:extension && npm run build:webview",
+    "build:extension": "node esbuild.mjs --production",
+    "build:webview": "vite build",
+    "watch": "concurrently -k -n ext,web -c blue,magenta \"node esbuild.mjs --watch\" \"vite build --watch\"",
+    "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
+    "smoke": "esbuild scripts/smoke-rpc.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/smoke-rpc.cjs && node dist/smoke-rpc.cjs",
+    "smoke:sessions": "esbuild scripts/smoke-sessions.ts --bundle --platform=node --target=node20 --format=cjs --alias:vscode=./scripts/harness/vscode-stub.ts --outfile=dist/smoke-sessions.cjs && node dist/smoke-sessions.cjs",
+    "package": "npm run build && vsce package --no-dependencies",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/vscode": "^1.104.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "@vscode/vsce": "^3.9.0",
+    "concurrently": "^9.2.0",
+    "esbuild": "^0.28.0",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.25",
+    "mermaid": "^11.16.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.2.0"
+  }
+}

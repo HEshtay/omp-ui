@@ -1,0 +1,408 @@
+/*
+ * omp's visual identity, layered over VS Code's.
+ *
+ * Layer 1 takes surface/foreground/border from the active VS Code theme so the
+ * panel never looks foreign. Layer 2 reasserts omp's own accent and semantic
+ * roles — the same tokens omp's HTML export and share viewer use — so tool
+ * cards, diffs and thinking blocks read as omp rather than as generic chrome.
+ */
+
+:root {
+	color-scheme: light dark;
+
+	--bg: var(--vscode-editor-background, #0f0b14);
+	--bg-raised: color-mix(in srgb, var(--bg) 88%, #ffffff 12%);
+	--bg-inset: color-mix(in srgb, var(--bg) 94%, #000000 6%);
+	--bg-overlay: var(--vscode-editorWidget-background, var(--bg-raised));
+
+	--fg: var(--vscode-editor-foreground, #e6e3ea);
+	--fg-muted: color-mix(in srgb, var(--fg) 66%, transparent);
+	--fg-faint: color-mix(in srgb, var(--fg) 42%, transparent);
+
+	/* omp magenta. Deliberately not the VS Code accent: this is the brand mark. */
+	--accent: #ed4abf;
+	--accent-muted: color-mix(in srgb, var(--accent) 16%, transparent);
+	--accent-strong: color-mix(in srgb, var(--accent) 82%, #ffffff 18%);
+	--violet: #945ff9;
+	--cyan: #5ad8e5;
+
+	--ok: #68ca80;
+	--err: #f05653;
+	--warn: #e4b33f;
+
+	--border: var(--vscode-panel-border, color-mix(in srgb, var(--fg) 14%, transparent));
+	--border-muted: color-mix(in srgb, var(--border) 60%, transparent);
+	--border-strong: color-mix(in srgb, var(--fg) 24%, transparent);
+	--link: var(--vscode-textLink-foreground, var(--cyan));
+
+	--tool-pending-bg: color-mix(in srgb, var(--fg) 5%, transparent);
+	--tool-success-bg: color-mix(in srgb, var(--fg) 4%, transparent);
+	--tool-error-bg: color-mix(in srgb, var(--err) 12%, transparent);
+	--user-bg: var(--accent-muted);
+	--diff-added: color-mix(in srgb, var(--ok) 20%, transparent);
+	--diff-removed: color-mix(in srgb, var(--err) 18%, transparent);
+
+	--font-ui: var(--vscode-font-family, "Segoe UI", system-ui, sans-serif);
+	--font-mono: var(
+		--vscode-editor-font-family,
+		ui-monospace,
+		"SF Mono",
+		"JetBrains Mono",
+		"Cascadia Mono",
+		Menlo,
+		Consolas,
+		monospace
+	);
+	--font-size: var(--vscode-font-size, 13px);
+	--font-size-mono: var(--vscode-editor-font-size, 12px);
+
+	--radius: 8px;
+	--radius-sm: 5px;
+	--gap: 10px;
+}
+
+body.vscode-high-contrast {
+	--border: var(--vscode-contrastBorder, #ffffff);
+	--border-muted: var(--vscode-contrastBorder, #ffffff);
+}
+
+* {
+	box-sizing: border-box;
+	min-width: 0;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	font-family: var(--font-ui);
+	font-size: var(--font-size);
+	color: var(--fg);
+	background: var(--bg);
+	overflow: hidden;
+	line-height: 1.55;
+}
+
+a {
+	color: var(--link);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+code,
+pre,
+kbd {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-mono);
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--vscode-scrollbarSlider-background, color-mix(in srgb, var(--fg) 18%, transparent));
+	border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--vscode-scrollbarSlider-hoverBackground, color-mix(in srgb, var(--fg) 28%, transparent));
+}
+
+::-webkit-scrollbar-corner,
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+/* ------------------------------------------------------------------ shell */
+
+.app {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+.app-body {
+	flex: 1;
+	display: flex;
+	min-height: 0;
+}
+
+.app-main {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+/* ----------------------------------------------------------------- atoms */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg-muted);
+	font: inherit;
+	font-size: calc(var(--font-size) - 1px);
+	padding: 3px 8px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--fg) 8%, transparent);
+	color: var(--fg);
+}
+
+.btn:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.btn:focus-visible,
+.icon-btn:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
+	outline: 1px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.btn-primary {
+	background: var(--accent);
+	color: #14060f;
+	font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: var(--accent-strong);
+	color: #14060f;
+}
+
+.btn-danger {
+	color: var(--err);
+	border-color: color-mix(in srgb, var(--err) 40%, transparent);
+}
+
+.btn-ghost {
+	border-color: var(--border);
+}
+
+.icon-btn {
+	display: inline-grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg-muted);
+	cursor: pointer;
+	padding: 0;
+}
+
+.icon-btn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--fg) 10%, transparent);
+	color: var(--fg);
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	border-radius: 999px;
+	padding: 1px 8px;
+	font-size: 11px;
+	line-height: 1.7;
+	background: color-mix(in srgb, var(--fg) 8%, transparent);
+	color: var(--fg-muted);
+	white-space: nowrap;
+}
+
+.chip-accent {
+	background: var(--accent-muted);
+	color: var(--accent);
+}
+
+.chip-ok {
+	background: color-mix(in srgb, var(--ok) 16%, transparent);
+	color: var(--ok);
+}
+
+.chip-warn {
+	background: color-mix(in srgb, var(--warn) 16%, transparent);
+	color: var(--warn);
+}
+
+.chip-err {
+	background: color-mix(in srgb, var(--err) 16%, transparent);
+	color: var(--err);
+}
+
+.muted {
+	color: var(--fg-muted);
+}
+
+.faint {
+	color: var(--fg-faint);
+}
+
+.mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-mono);
+}
+
+.truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.spacer {
+	flex: 1;
+}
+
+/* --------------------------------------------------------------- spinner */
+
+.spinner {
+	display: inline-block;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	border: 1.5px solid color-mix(in srgb, var(--accent) 35%, transparent);
+	border-top-color: var(--accent);
+	animation: omp-spin 0.7s linear infinite;
+	flex: none;
+}
+
+@keyframes omp-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.pulse {
+	animation: omp-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes omp-pulse {
+	0%,
+	100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.spinner,
+	.pulse {
+		animation: none;
+	}
+}
+
+/* ---------------------------------------------------------------- toasts */
+
+.toasts {
+	position: absolute;
+	right: 12px;
+	bottom: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	z-index: 40;
+	max-width: min(420px, 80%);
+}
+
+.toast {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 7px 10px;
+	border-radius: var(--radius);
+	border: 1px solid var(--border);
+	background: var(--bg-overlay);
+	box-shadow: 0 6px 20px rgb(0 0 0 / 28%);
+	font-size: calc(var(--font-size) - 1px);
+}
+
+.toast-error {
+	border-color: color-mix(in srgb, var(--err) 55%, transparent);
+}
+
+.toast-warning {
+	border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+}
+
+/* --------------------------------------------------------------- popover */
+
+.popover {
+	position: absolute;
+	z-index: 30;
+	min-width: 240px;
+	max-width: min(520px, 92vw);
+	max-height: 60vh;
+	overflow: auto;
+	background: var(--bg-overlay);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius);
+	box-shadow: 0 10px 32px rgb(0 0 0 / 34%);
+	padding: 4px;
+}
+
+.popover-item {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	width: 100%;
+	text-align: left;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	padding: 5px 8px;
+	cursor: pointer;
+}
+
+.popover-item:hover,
+.popover-item[data-active="true"] {
+	background: var(--accent-muted);
+}
+
+.popover-item-title {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.popover-empty {
+	padding: 10px;
+	color: var(--fg-faint);
+}
+
+.popover-group {
+	padding: 6px 8px 2px;
+	font-size: 10px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--fg-faint);
+}

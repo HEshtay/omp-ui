@@ -1,0 +1,20 @@
+.gitignore
+.vscode/**
+.vscode-test/**
+src/**
+webview/**
+scripts/**
+node_modules/**
+esbuild.mjs
+vite.config.ts
+tsconfig*.json
+**/*.map
+**/*.ts
+*.vsix
+
+# Dev-only build outputs. `dist/` is otherwise shipped wholesale, and a `!dist/**`
+# negation would silently re-include these: vsce applies negations after every
+# ignore pattern, so a negation always wins regardless of line order.
+dist/webview/harness.html
+dist/*.cjs
+dist/recorded-session.json

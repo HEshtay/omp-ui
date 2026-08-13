@@ -1,0 +1,390 @@
+/*
+ * Top bar, bottom status strip and the shared popover shell.
+ *
+ * Everything here is chrome: it frames the transcript without competing with
+ * it, so the only saturated colour is the omp mark itself and whatever a
+ * status segment has genuinely earned (context pressure, fast mode).
+ */
+
+/* --------------------------------------------------------------- popover */
+
+/*
+ * `.popover` in theme.css is `position: absolute`; the portal mounts on
+ * `document.body`, and we position from `getBoundingClientRect()`, so the
+ * coordinates are viewport-relative.
+ */
+.chrome-popover {
+	position: fixed;
+}
+
+.chrome-popover:focus-visible {
+	outline: none;
+}
+
+.popover-meta {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 10px;
+	color: var(--fg-faint);
+}
+
+.popover-item-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.popover-sep {
+	height: 1px;
+	margin: 4px 6px;
+	background: var(--border-muted);
+}
+
+/* ------------------------------------------------------------ session bar */
+
+.session-bar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 4px 3px 8px;
+	border-bottom: 1px solid var(--border);
+	background: var(--bg);
+	min-height: 30px;
+}
+
+.session-mark {
+	display: inline-grid;
+	place-items: center;
+	color: var(--accent);
+	flex: none;
+}
+
+.session-title {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	font-size: calc(var(--font-size) - 1px);
+	font-weight: 600;
+	padding: 2px 6px;
+	cursor: text;
+	min-width: 0;
+	max-width: 60%;
+}
+
+.session-title:hover {
+	background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.session-title-untitled {
+	color: var(--fg-faint);
+	font-weight: 400;
+}
+
+.session-name-input {
+	flex: 1;
+	min-width: 0;
+	max-width: 60%;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-sm);
+	background: var(--bg-inset);
+	color: var(--fg);
+	font: inherit;
+	font-size: calc(var(--font-size) - 1px);
+	padding: 2px 6px;
+}
+
+.session-streaming {
+	flex: none;
+}
+
+/* ----------------------------------------------------------- project bar */
+
+.project-bar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 6px;
+	border-bottom: 1px solid var(--border);
+	background: var(--bg-inset);
+	min-height: 28px;
+}
+
+.project-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg-muted);
+	font: inherit;
+	font-size: calc(var(--font-size) - 1px);
+	padding: 2px 8px;
+	cursor: pointer;
+	max-width: 100%;
+}
+
+.project-tab:hover {
+	background: color-mix(in srgb, var(--fg) 8%, transparent);
+	color: var(--fg);
+}
+
+.project-tab-label {
+	font-weight: 600;
+}
+
+.project-tab-branch {
+	font-size: 10px;
+	font-weight: 400;
+}
+
+/* Awaiting-approval indicator for a background project. */
+.project-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--warn);
+	flex: none;
+}
+
+/* `project · session`: the project leads the chip, the session follows. */
+.project-tab-session {
+	min-width: 0;
+}
+
+.project-tab-session::before {
+	content: "·";
+	margin-right: 6px;
+	color: var(--fg-faint);
+}
+
+/* Project heading inside the switcher, with its own new-session button. */
+.project-group {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.project-group .icon-btn {
+	width: 20px;
+	height: 20px;
+}
+
+/* A session row: the row picks the session, the trailing button closes it. */
+.session-row {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.session-row > .popover-item {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.session-row .icon-btn {
+	width: 22px;
+	height: 22px;
+	flex: none;
+}
+
+/* ---------------------------------------------------------- status banner */
+
+.session-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 10px;
+	font-size: calc(var(--font-size) - 1px);
+	border-bottom: 1px solid var(--border-muted);
+	background: var(--bg-inset);
+}
+
+.session-banner-error {
+	color: var(--err);
+	background: var(--tool-error-bg);
+	border-bottom-color: color-mix(in srgb, var(--err) 45%, transparent);
+	align-items: flex-start;
+}
+
+.session-banner-detail {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-mono);
+}
+
+/* ------------------------------------------------------------- status bar */
+
+.status-bar {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 8px;
+	border-top: 1px solid var(--border);
+	background: var(--bg-inset);
+	font-size: 11px;
+	color: var(--fg-muted);
+	min-height: 24px;
+	overflow: hidden;
+}
+
+/* `.chip` as a control: strip the button chrome, keep the pill. */
+.chip-btn {
+	border: 0;
+	font: inherit;
+	font-size: 11px;
+	line-height: 1.7;
+	cursor: pointer;
+	max-width: 100%;
+}
+
+.chip-btn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--fg) 16%, transparent);
+	color: var(--fg);
+}
+
+.chip-btn:disabled {
+	cursor: default;
+	opacity: 0.6;
+}
+
+.chip-btn:focus-visible {
+	outline: 1px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.status-model {
+	font-family: var(--font-mono);
+	min-width: 0;
+	overflow: hidden;
+}
+
+.status-model-id {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.status-think {
+	font-family: var(--font-mono);
+	letter-spacing: 0.02em;
+}
+
+.status-think[data-on="true"] {
+	color: var(--violet);
+	background: color-mix(in srgb, var(--violet) 16%, transparent);
+}
+
+/*
+ * `.chip-btn:hover` outranks the single-class colour rules, so every semantic
+ * chip restates its own hover: pressure and fast mode must not grey out under
+ * the cursor.
+ */
+.status-think[data-on="true"]:hover:not(:disabled) {
+	color: var(--violet);
+	background: color-mix(in srgb, var(--violet) 26%, transparent);
+}
+
+.chip-accent.chip-btn:hover:not(:disabled) {
+	color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* Context pressure owns its colour; the bar tracks the text via currentColor. */
+.status-ctx {
+	font-family: var(--font-mono);
+}
+
+.status-ctx[data-level="warning"] {
+	color: var(--warn);
+	background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+
+.status-ctx[data-level="purple"] {
+	color: var(--violet);
+	background: color-mix(in srgb, var(--violet) 16%, transparent);
+}
+
+.status-ctx[data-level="error"] {
+	color: var(--err);
+	background: color-mix(in srgb, var(--err) 16%, transparent);
+}
+
+.status-ctx[data-level="warning"]:hover:not(:disabled) {
+	color: var(--warn);
+	background: color-mix(in srgb, var(--warn) 24%, transparent);
+}
+
+.status-ctx[data-level="purple"]:hover:not(:disabled) {
+	color: var(--violet);
+	background: color-mix(in srgb, var(--violet) 26%, transparent);
+}
+
+.status-ctx[data-level="error"]:hover:not(:disabled) {
+	color: var(--err);
+	background: color-mix(in srgb, var(--err) 26%, transparent);
+}
+
+.status-ctx-track {
+	position: relative;
+	flex: none;
+	width: 26px;
+	height: 3px;
+	border-radius: 999px;
+	background: color-mix(in srgb, currentColor 22%, transparent);
+	overflow: hidden;
+}
+
+.status-ctx-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	background: currentColor;
+	border-radius: 999px;
+}
+
+.status-ctx-auto {
+	font-size: 9px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	opacity: 0.75;
+}
+
+.status-fast[data-mismatch="true"] {
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 60%, transparent);
+}
+
+.status-id {
+	font-family: var(--font-mono);
+	color: var(--fg-faint);
+}
+
+.status-workspace {
+	max-width: 40%;
+	color: var(--fg-faint);
+}
+
+/* --------------------------------------------------------- model picker */
+
+.model-item-name {
+	font-weight: 600;
+}
+
+.model-item-id {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--fg-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

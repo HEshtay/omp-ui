@@ -1,0 +1,233 @@
+/*
+ * Composer + slash menu.
+ *
+ * Specificity is deliberately raised past theme.css atoms (`.btn`, `.popover`,
+ * `textarea:focus-visible`): this file's position in the CSS bundle depends on
+ * module graph order, so overrides may not win on source order alone.
+ */
+
+.composer {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 10px 10px;
+	border-top: 1px solid var(--border);
+	background: var(--bg);
+	flex: none;
+}
+
+.composer[data-dragging="true"] .composer-input-wrap {
+	border-color: var(--accent);
+	background: var(--accent-muted);
+}
+
+.composer-blocked {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	min-width: 0;
+	font-size: 11px;
+	color: var(--warn);
+}
+
+.composer-blocked[data-level="error"] {
+	color: var(--err);
+}
+
+.composer-blocked > .truncate {
+	min-width: 0;
+	flex: 1 1 120px;
+}
+
+/* ------------------------------------------------------------------ input */
+
+.composer-input-wrap {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	padding: 6px 8px;
+	border: 1px solid var(--border);
+	border-left: 2px solid var(--accent);
+	border-radius: var(--radius);
+	background: var(--bg-inset);
+}
+
+.composer-input-wrap:focus-within {
+	border-color: var(--border-strong);
+	border-left-color: var(--accent-strong);
+}
+
+.composer-input {
+	display: block;
+	width: 100%;
+	min-width: 0;
+	/* Three rows of breathing room, capped so the transcript keeps the screen. */
+	min-height: calc(var(--font-size) * 1.5 * 3);
+	max-height: 40vh;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--fg);
+	font-family: var(--font-ui);
+	font-size: var(--font-size);
+	line-height: 1.5;
+	resize: none;
+	overflow-y: auto;
+}
+
+.composer-input-wrap .composer-input:focus,
+.composer-input-wrap .composer-input:focus-visible {
+	/* The wrapper already reacts to :focus-within; a second ring reads as noise. */
+	outline: none;
+}
+
+.composer-input::placeholder {
+	color: var(--fg-faint);
+}
+
+/* ------------------------------------------------------------ attachments */
+
+.composer-attachments {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.composer-thumb {
+	position: relative;
+	width: 58px;
+	height: 58px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--bg-raised);
+	overflow: hidden;
+}
+
+.composer-thumb img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.composer-thumb-size {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	padding: 1px 0;
+	background: rgb(0 0 0 / 58%);
+	color: #fff;
+	font-size: 9px;
+	text-align: center;
+}
+
+.composer-thumb-remove {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	display: grid;
+	place-items: center;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: rgb(0 0 0 / 62%);
+	color: #fff;
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.composer-thumb-remove:hover {
+	background: var(--err);
+}
+
+/* ---------------------------------------------------------------- actions */
+
+.composer-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	min-width: 0;
+}
+
+.composer-actions .spacer {
+	/* Collapses first so buttons wrap onto their own row instead of overflowing. */
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.composer-hint {
+	min-width: 0;
+	font-size: 11px;
+}
+
+/* Sidebar-narrow: the keybinding reminder is the first thing worth dropping. */
+@media (max-width: 380px) {
+	.composer-hint {
+		display: none;
+	}
+}
+
+.composer-send {
+	display: inline-flex;
+	align-items: stretch;
+	border-radius: var(--radius-sm);
+	overflow: hidden;
+}
+
+.composer-send .btn {
+	border-radius: 0;
+}
+
+.composer-send .composer-send-alt {
+	background: color-mix(in srgb, var(--accent) 58%, transparent);
+	border-left: 1px solid rgb(0 0 0 / 28%);
+	font-weight: 500;
+}
+
+.composer-send .composer-send-alt:hover:not(:disabled) {
+	background: var(--accent-strong);
+}
+
+/* ------------------------------------------------------------- slash menu */
+
+.popover.slash-menu {
+	left: 0;
+	right: 0;
+	bottom: calc(100% + 6px);
+	min-width: 0;
+	max-width: none;
+	max-height: min(320px, 42vh);
+}
+
+.slash-name {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.slash-hint,
+.slash-alias {
+	font-size: 11px;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.slash-desc {
+	font-size: 11px;
+	line-height: 1.35;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+}
