@@ -223,6 +223,8 @@ export type WebviewMessage =
   | { type: "switchSession"; path: string }
   | { type: "selectSession"; id: string }
   | { type: "addProjectFolder" }
+  /** Drop a project from the roster, terminating every session it owns. */
+  | { type: "removeProjectFolder"; projectId: string }
   | { type: "setSessionName"; name: string }
   | { type: "requestBranchPoints" }
   | { type: "branch"; entryId: string }
@@ -240,6 +242,11 @@ export type WebviewMessage =
     }
   | { type: "openExternal"; url: string }
   | { type: "openArtifact"; url: string }
+  /**
+   * Open a mermaid diagram full size in an editor tab. `svg` is the webview's
+   * own render (empty when it failed), `background` the colour behind it.
+   */
+  | { type: "openDiagram"; source: string; svg: string; background: string }
   | { type: "copyText"; text: string }
   | { type: "revealSubagent"; sessionFile: string }
   | { type: "pickImages" }

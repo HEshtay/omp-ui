@@ -307,12 +307,17 @@ body.vscode-high-contrast-light .md-fence {
 
 /* ---------------------------------------------------------------- mermaid */
 
+/* Frame plus head bar, matching a fence: the head carries copy / open. */
 .md-mermaid {
 	margin: 0 0 10px;
-	padding: 8px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	background: var(--bg-inset);
+	overflow: hidden;
+}
+
+.md-mermaid-body {
+	padding: 8px;
 	overflow-x: auto;
 	text-align: center;
 }
@@ -335,9 +340,13 @@ body.vscode-high-contrast-light .md-fence {
 
 .md-mermaid-failed {
 	margin: 0 0 10px;
-	padding: 4px;
 	border: 1px solid var(--border-muted);
 	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.md-mermaid-failed .md-plain-pre {
+	border-radius: 0;
 }
 
 .md-mermaid-failed .faint {

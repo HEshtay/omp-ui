@@ -33,6 +33,7 @@ import type {
 	ThinkingLevel,
 } from "../shared/protocol";
 import { APPROVE_LABEL, DENY_LABEL } from "../shared/protocol";
+import { openDiagram } from "../view/diagram-preview";
 import type { DiffContentProvider } from "../view/diff-provider";
 
 /** Streaming deltas are coalesced into one postMessage per frame budget. */
@@ -55,6 +56,12 @@ export interface ControllerDeps {
    * branch.
    */
   label?: string;
+  /**
+   * Extra environment for the agent process, keyed by the session's cwd. Used
+   * to inject the IDE-bridge address so the agent's MCP client can reach *this*
+   * window, and to tell it which session's working directory it is serving.
+   */
+  agentEnv?: (cwd: string) => Record<string, string>;
 }
 
 /**
@@ -169,6 +176,7 @@ export class ChatController implements vscode.Disposable {
         executable: config.get<string>("executablePath")?.trim() || "omp",
         extraArgs,
         cwd: this.#session.cwd,
+        env: this.deps.agentEnv?.(this.#session.cwd),
         log: (message) => this.deps.output.info(message),
       },
       {
@@ -623,6 +631,10 @@ export class ChatController implements vscode.Disposable {
 
       case "openArtifact":
         await this.#openArtifact(message.url);
+        return;
+
+      case "openDiagram":
+        await openDiagram(message);
         return;
 
       case "copyText":

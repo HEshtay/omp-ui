@@ -9,6 +9,10 @@ This document describes how the extension is put together: the process
 topology, the two message protocols, the state-management model, the
 rendering architecture, and the key engineering decisions behind it.
 
+For the module-by-module API surface — every file, its exports, signatures, and
+the limits/timeouts/regexes behind them — see
+[`code-reference.md`](./code-reference.md).
+
 ---
 
 ## 1. System Context
@@ -131,10 +135,11 @@ This is the JSON message contract carried by
   `resetSession`, `switchSession`, `requestSessions`, `setSessionName`,
   `branch`, model/thinking/mode toggles, `saveDraft`, `dialogAnswer`.
 - Session/project roster messages handled by the `SessionManager` rather than a
-  controller: `newSession`, `closeSession`, `selectSession`, `addProjectFolder`.
+  controller: `newSession`, `closeSession`, `selectSession`,
+  `addProjectFolder`, `removeProjectFolder`.
 - Intent-to-act messages the host translates into VS Code or agent actions:
-  `openFile`, `openDiff`, `openExternal`, `openArtifact`, `copyText`,
-  `revealSubagent`, `pickImages`, `showLog`, `loginProvider`.
+  `openFile`, `openDiff`, `openExternal`, `openArtifact`, `openDiagram`,
+  `copyText`, `revealSubagent`, `pickImages`, `showLog`, `loginProvider`.
 - `refreshState` — ask the host to re-pull state and push a fresh snapshot.
 
 ---
@@ -159,7 +164,7 @@ Notes:
   `tsconfig.extension.json` (host) and `tsconfig.webview.json` (webview); both
   extend `tsconfig.base.json`. `npm run typecheck` checks both.
 - `npm run build`, `watch`, `smoke`, `package` scripts orchestrate the two
-  builds plus the dev harnesses (§7).
+  builds plus the dev harnesses (§8).
 
 The **Content-Security-Policy** in `src/view/chat-view.ts:renderHtml` uses a
 per-load nonce plus `strict-dynamic`, with `connect-src 'none'` (no network in
@@ -178,6 +183,17 @@ src/                        # Extension host (Node)
 ├── extension.ts            # Activation, DI wiring, command registration
 ├── chat/
 │   └── controller.ts       # ChatController: orchestrator, owns agent + state
+├── ide/                    # IDE-as-MCP-server bridge (§7)
+│   ├── protocol.ts         # Host ⇄ shim IPC contract (types + env var names)
+│   ├── bridge-server.ts    # IdeBridgeServer: named pipe / unix socket listener
+│   ├── mcp-shim.ts         # Standalone MCP stdio server omp launches
+│   ├── registration.ts     # Idempotent ~/.omp/agent/mcp.json merge
+│   └── tools/              # The tools the agent actually sees
+│       ├── types.ts        # IdeTool + IdeToolContext
+│       ├── registry.ts     # ideTools: the single list the bridge serves
+│       ├── format.ts       # MAX_RESULT_CHARS + truncate() + shared formatting
+│       ├── diagnostics.ts / navigate.ts / symbols.ts
+│       └── scm.ts / tasks.ts
 ├── rpc/                    # Agent wire protocol
 │   ├── client.ts           # OmpRpcClient: spawn, framing, dispatch, request()
 │   ├── frame.ts            # RpcFrameDecoder: v2 chunk reassembly
@@ -192,7 +208,8 @@ src/                        # Extension host (Node)
 │   └── guards.ts           # Minimal structural type guards
 └── view/
     ├── chat-view.ts        # WebviewViewProvider + WebviewPanel + HTML/CSP/bind
-    └── diff-provider.ts    # In-memory omp-diff:// content provider
+    ├── diff-provider.ts    # In-memory omp-diff:// content provider
+    └── diagram-preview.ts  # Mermaid render -> standalone .svg in an editor tab
 
 webview/                    # React renderer (Vite)
 ├── index.html
@@ -206,16 +223,20 @@ webview/                    # React renderer (Vite)
     └── components/
         ├── Transcript.tsx  # Auto-scrolling transcript rendering
         ├── MessageItem.tsx # Per-kind message renderer (memoized)
-        ├── Markdown.tsx / Mermaid.tsx / Thinking.tsx
-        ├── Composer.tsx / SessionBar.tsx / StatusBar.tsx
+        ├── Markdown.tsx    # react-markdown pipeline (memoized)
+        ├── CodeBlock.tsx / Mermaid.tsx / Thinking.tsx
+        ├── Composer.tsx    # Draft, images, send/steer/queue
+        ├── SlashMenu.tsx   # Slash-command context + ranking + dropdown
+        ├── SessionBar.tsx / StatusBar.tsx
         ├── SessionSwitcher.tsx # Project + live-session switcher
+        ├── Popover.tsx     # Measured, portalled floating panel
         ├── Icon.tsx        # Shared 16×16 stroked-glyph primitive
         ├── DialogHost.tsx  # Renders blocking select/confirm/input/editor
         ├── TodoPanel.tsx / SubagentPanel.tsx / Toasts.tsx
         └── tools/          # Registry-driven tool-call cards
             ├── registry.ts # Tool name → renderer map
             ├── ToolCard.tsx# Shared card frame + error boundary
-            ├── types.ts / detail.ts / parts.ts
+            ├── types.ts / detail.ts / parts.tsx
             ├── fs.tsx / shell.tsx / search.tsx / web.tsx
             ├── agentic.tsx / generic.tsx
             └── tools.css
@@ -281,16 +302,22 @@ re-render per streamed frame.
 
 ### 6.1 `extension.ts` — activation & wiring
 
-Small by design. Builds the dependency graph and registers everything:
+`activate` is `async` and small by design. It builds the dependency graph and
+registers everything:
 - Creates the `OMP` output channel and the `DiffContentProvider`.
+- Starts the IDE bridge (§7) — best effort, awaited before any session exists so
+  the first agent to spawn already knows the address — and supplies the
+  `agentEnv` function that hands each session's child that address plus its own
+  `cwd`.
 - Constructs the `SessionManager`, registers every workspace folder as a
   project with one (lazily-spawned) session, and wires the per-session editor
   panels into it.
 - Registers the webview view provider (sidebar `omp.chatView`, with
   `retainContextWhenHidden`) and the `omp-diff://` content provider.
-- Registers ~15 commands (`omp.openChat`, `omp.newSession`, `omp.closeSession`,
-  `omp.abort`, etc.) and the configuration-change listener that offers a
-  restart when a launch-time setting changes.
+- Registers 17 commands (`omp.openChat`, `omp.newSession`, `omp.closeSession`,
+  `omp.abort`, `omp.registerIdeBridge`, etc.) and the single
+  configuration-change listener that offers an agent restart when a launch-time
+  setting changes, or a window reload when `omp.ideBridge.enabled` changes.
 
 ### 6.2 `ChatController` (`src/chat/controller.ts`)
 
@@ -343,10 +370,11 @@ Webviews never touch a controller directly; they bind to a *surface*:
 
 The manager fans a controller's host messages out to the surfaces showing that
 session, answers the roster messages itself (`newSession`, `closeSession`,
-`selectSession`, `addProjectFolder`), and broadcasts `workspace` + per-session
-`sessionStatus` to *every* surface so background badges stay live. Session ids
-are minted (`<cwd>#<n>`) and ordinals are never reused, so labels stay stable;
-the window always keeps at least one session.
+`selectSession`, `addProjectFolder`, `removeProjectFolder`), and broadcasts
+`workspace` + per-session `sessionStatus` to *every* surface so background
+badges stay live. Session ids are minted (`<cwd>#<n>`) and ordinals are never
+reused, so labels stay stable; the window always keeps at least one session,
+and a project removal that would break that is refused.
 
 ### 6.6 `src/view/chat-view.ts`
 
@@ -364,7 +392,18 @@ Both surfaces bind via a common `bind()` helper:
 diff. Contents are held in memory keyed by an opaque `omp-diff://` id, so a diff
 can be opened straight from a tool card without touching the filesystem.
 
-### 6.8 Webview rendering (`webview/src/`)
+### 6.8 Diagram preview
+
+`src/view/diagram-preview.ts` opens a mermaid diagram in an editor tab, where it
+gets the full editor width and VS Code's image zoom instead of a sidebar
+column's worth of pixels. The webview has already rendered the diagram, so its
+SVG is reused verbatim — mermaid never enters the extension host. The inline
+render is sized to its container, so `standalone()` pins scaled viewBox
+dimensions and paints an opaque backdrop before the file is written to
+`<tmp>/omp-diagrams/` and opened with the built-in `imagePreview.previewEditor`.
+A diagram mermaid refused has no SVG to reuse; its source opens as text instead.
+
+### 6.9 Webview rendering (`webview/src/`)
 
 - **`store.ts`** — `UiStore` + `useSyncExternalStore` hooks
   (`useUi(selector)`); the render pipeline subscribes only to what it renders.
@@ -378,7 +417,7 @@ can be opened straight from a tool card without touching the filesystem.
   blocks subscribe to their own `toolCalls` entry so a running tool re-renders
   itself instead of its whole message.
 
-### 6.9 Tool rendering: the registry pattern
+### 6.10 Tool rendering: the registry pattern
 
 `webview/src/components/tools/` mirrors omp's own renderer registry.
 - **`registry.ts`** maps tool names (`bash`, `edit`/`apply_patch`, `read`,
@@ -394,7 +433,125 @@ can be opened straight from a tool card without touching the filesystem.
   `Map<toolCallId, boolean>` — a user decision, not conversation state.
 
 ---
-## 7. Development & Verification Tooling
+## 7. The IDE Bridge: this Window as an MCP Server
+
+*Defined in:* `src/ide/`
+
+The agent's default view of a repository is the file system. Everything VS Code
+already knows — the language server's diagnostics, its definition and reference
+graph, the symbol index, the SCM diff, the task list — is invisible to it, so it
+re-derives a worse approximation with `grep`. This layer hands that state over as
+**MCP tools**, which the agent *pulls* on demand.
+
+### 7.1 Two-hop topology
+
+```text
+┌ VS Code window ──────────────────────────────┐
+│  Extension host                              │
+│    IdeBridgeServer  ── listens on ──┐        │
+│    ideTools[]                       │        │
+└─────────────────────────────────────┼────────┘
+                                      │ named pipe (Windows)
+                                      │ unix socket (POSIX)
+                                      │ newline-delimited JSON
+┌ omp child (one per session) ─────────┼───────┐
+│    MCP client ── stdio JSON-RPC ─► mcp-shim  │
+└──────────────────────────────────────────────┘
+```
+
+omp discovers MCP servers **only** from `mcp.json` files (project `.omp/mcp.json`,
+user `~/.omp/agent/mcp.json`) — never from `config.yml` or a `--config` overlay.
+It speaks `initialize` (protocol `2025-03-26`) → `notifications/initialized` →
+`tools/list`, honours `notifications/tools/list_changed`, and presents each tool
+to the model as `mcp__vscode-ide_<name>`.
+
+So the extension registers one **user-level stdio server** named `vscode-ide`
+that launches a tiny shim, and the shim proxies to the extension host over an IPC
+endpoint whose path arrives in its environment. Two hops rather than one, because
+a stdio server is a *child of the agent* and cannot be the extension host.
+
+Why IPC instead of an HTTP listener in the host:
+- **No TCP port** to allocate, collide on, or expose to other processes on the
+  machine — and therefore **no bearer token** to mint, store, and rotate.
+  Reachability *is* the authorization, enforced by OS-level ACLs on the pipe.
+- **Per-window addressing.** Each window's server has its own path, so a session
+  can never be answered by a different window's IDE state.
+- **Graceful degradation.** When the address is absent from the environment — a
+  plain terminal `omp` that this extension did not launch — the shim still
+  completes the MCP handshake and advertises **zero tools**. A silent no-op, not a
+  connection error and not a broken server entry.
+
+### 7.2 Contract A — host ⇄ shim
+
+*Defined in:* `src/ide/protocol.ts`, imported by both sides. Newline-delimited
+JSON, one object per line, correlated by `id` exactly like the RPC protocol
+(§2.1).
+
+**Shim → host:**
+- `{ id, op: "hello", cwd }` — announce the session this agent runs in.
+- `{ id, op: "list" }` → `result` is `{ tools: IdeToolDescriptor[] }`.
+- `{ id, op: "call", tool, args }` → `result` is `{ text, isError? }`.
+
+**Host → shim:** `{ id, ok: true, result }` or `{ id, ok: false, error }`, plus
+the unsolicited `{ op: "tools_changed" }`, which the shim republishes as
+`notifications/tools/list_changed`.
+
+### 7.3 Contract B/C — the `IdeTool` extension point
+
+Every tool is an `IdeTool` (`src/ide/tools/types.ts`): a bare `name`, a
+`description`, a plain JSON-Schema `inputSchema` object, and
+`invoke(args, ctx) => Promise<string>`. `IdeToolContext` carries the calling
+session's `cwd` and the OMP log channel. `src/ide/tools/registry.ts` exports the
+single `ideTools` array the bridge serves.
+
+The return value goes straight into a model's context, so the output contract is
+deliberately strict:
+- Terse and line-oriented — `path:line:col  message`, not prose or a JSON dump.
+- Paths workspace-relative (`asRelativePath`); lines and columns **1-based**,
+  converted from VS Code's 0-based API.
+- Capped at `MAX_RESULT_CHARS` (24 000) via the shared `truncate()`, which appends
+  an explicit `… N more (truncated)` line rather than clipping silently.
+- An empty result is a *success* that says so (`No diagnostics.`), never `""`.
+- Bad arguments `throw`; the host turns a throw into `{ isError: true }`, so one
+  bad call never takes the bridge down.
+
+### 7.4 Registration & lifecycle
+
+`src/ide/registration.ts` merges our entry into `~/.omp/agent/mcp.json` on every
+activation — the shim path lives inside the extension install directory and moves
+on upgrade, so registration must self-heal. It parses, mutates *only*
+`mcpServers["vscode-ide"]`, and re-serializes, so unrelated keys and third-party
+servers survive. A file that is malformed JSON is **left alone** with a warning:
+losing a developer's other servers is worse than not registering. An entry that
+already deep-equals what we would write is not rewritten.
+
+Two parts of that entry are load-bearing and non-obvious:
+1. **`env` values are variable *names*, not values.** Before connecting, omp
+   resolves an `env` value that names a **set** environment variable to that
+   variable's contents. Writing `"OMP_IDE_BRIDGE_PIPE": "OMP_IDE_BRIDGE_PIPE"`
+   therefore means *"copy this from my own environment"* — so the address stays
+   per-window and per-session instead of being baked into a global config file.
+   When the variable is *unset*, the resolution falls through and the shim is
+   handed the **literal** string `"OMP_IDE_BRIDGE_PIPE"`; the shim treats a
+   value equal to its own variable name as unconfigured, which is what turns a
+   terminal `omp` into the zero-tool case rather than a failed connection.
+   (`envPolicy: "literal"` would disable this resolution, so the entry must not
+   set it.)
+2. **`ELECTRON_RUN_AS_NODE=1` with `command: process.execPath`.** VS Code's own
+   binary is Electron, and nothing guarantees a plain `node` on the agent's
+   `PATH`; this flag makes that same binary behave as a bare Node interpreter.
+
+`extension.ts` starts the server, registers it, and pushes it into
+`context.subscriptions`, all behind `omp.ideBridge.enabled`. Failure is contained:
+a pipe we cannot bind or a config we cannot write logs a warning and leaves
+`bridge` undefined — activation continues, and the per-session `agentEnv` supplier
+returns `{}`. When the bridge *is* up, that supplier gives every agent child
+`OMP_IDE_BRIDGE_PIPE` (this window) and `OMP_IDE_BRIDGE_CWD` (that session's own
+working directory), which is how one window's several sessions stay distinct on a
+single socket.
+
+---
+## 8. Development & Verification Tooling
 
 The `scripts/` directory supports working on this extension outside a full VS
 Code host:
@@ -408,6 +565,13 @@ Code host:
   real agent processes. Asserts sessions stay independent (own session file, own
   transcript), that background badges reach every surface, and that
   focus/reset/close behave.
+- **`smoke-ide-bridge.ts`** (`npm run smoke:ide`) — runs a real `IdeBridgeServer`
+  over a real socket with a *stub* tool list, spawns the built `dist/mcp-shim.js`
+  the way omp would, and drives raw MCP JSON-RPC over its stdio: handshake,
+  `tools/list`, a `tools/call` that round-trips through the bridge, and an
+  unknown-tool call that must come back as an error result instead of a crash. A
+  second shim spawned with no bridge address asserts the degraded contract
+  (handshake succeeds, zero tools, nothing on stderr). Needs no `omp` binary.
 - **`record-session.ts`** (`npm run record`) — runs the *production*
   `ChatController` against a live agent (with the `vscode` module stubbed via
   `harness/vscode-stub.ts`) and writes the exact `HostMessage` stream the
@@ -419,7 +583,7 @@ Code host:
 
 ---
 
-## 8. Key Architectural Decisions
+## 9. Key Architectural Decisions
 
 1. **The host is authoritative; the webview is a disposable renderer.**
    VS Code destroys hidden webviews, so all durable state lives in the
@@ -463,7 +627,7 @@ Code host:
     simultaneously.
 
 ---
-## 9. Sequence: A Prompt Round-Trip
+## 10. Sequence: A Prompt Round-Trip
 
 ```mermaid
 sequenceDiagram
@@ -504,7 +668,7 @@ sequenceDiagram
 
 ---
 
-## 10. Configuration Surface
+## 11. Configuration Surface
 
 All settings live under the `omp.` namespace (`package.json` →
 `contributes.configuration`):
@@ -513,13 +677,16 @@ All settings live under the `omp.` namespace (`package.json` →
   A change to any of these prompts the user to restart the agent.
 - **Runtime/streaming:** `subagentSubscription`, `showThinking`, `autoScroll`,
   `sendKeybinding`.
+- **Activation-time:** `ideBridge.enabled`. The bridge's socket is created and
+  registered during activation, so a change prompts a *window reload* rather than
+  an agent restart.
 
 `src/chat/controller.ts:readUiConfig()` reads the UI-affecting subset and is
 included in every `snapshot` under `config`.
 
 ---
 
-## 11. Conventions & Extension Points
+## 12. Conventions & Extension Points
 
 - Add a new agent-side capability by expressing it in `src/shared/protocol.ts`
   (command type + response data), mapping it in `ChatController`
@@ -527,6 +694,13 @@ included in every `snapshot` under `config`.
 - Add a new tool renderer by implementing `ToolRenderer` (`tools/types.ts`)
   and registering it in `tools/registry.ts`; the generic card + error boundary
   cover everything else.
+- Add a new IDE tool by implementing `IdeTool` in a module under
+  `src/ide/tools/`, exporting it in that module's own `IdeTool[]`, and spreading
+  that array into `ideTools` in `src/ide/tools/registry.ts`. Honour the output
+  contract in §7.3 — workspace-relative paths, 1-based positions, `truncate()`,
+  an explicit empty-result sentence, and `throw` on bad arguments. No other file
+  changes: the shim, the schema advertised to the model, and the registration all
+  follow from the registry.
 - **Keep `src/shared/` free of imports from host or webview code** — it is the
   single shared boundary and must stay transport-agnostic and Node-free for the
   webview.
