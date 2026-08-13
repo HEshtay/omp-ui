@@ -19,6 +19,7 @@ import path from "node:path";
 import { IdeBridgeServer } from "../src/ide/bridge-server";
 import { IDE_BRIDGE_CWD_ENV, IDE_BRIDGE_PIPE_ENV } from "../src/ide/protocol";
 import type { IdeTool } from "../src/ide/tools/types";
+import { deferred } from "../src/shared/deferred";
 import { harness } from "./harness/vscode-stub";
 
 const SHIM = path.resolve(__dirname, "..", "dist", "mcp-shim.js");
@@ -114,7 +115,7 @@ class ShimClient {
 	/** Send a request and resolve with the whole JSON-RPC response envelope. */
 	request(method: string, params?: unknown, timeoutMs = 10_000): Promise<Record<string, unknown>> {
 		const id = this.#nextId++;
-		const done = Promise.withResolvers<Record<string, unknown>>();
+		const done = deferred<Record<string, unknown>>();
 		const timeout = setTimeout(
 			() => done.reject(new Error(`no response to ${method} within ${timeoutMs}ms`)),
 			timeoutMs,

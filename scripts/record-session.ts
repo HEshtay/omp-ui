@@ -11,6 +11,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { ChatController } from "../src/chat/controller";
 import type { HostMessage } from "../src/shared/bridge";
+import { deferred } from "../src/shared/deferred";
 import { harness } from "./harness/vscode-stub";
 
 const prompt = process.argv.slice(2).join(" ") || "Summarize this repository in three bullets.";
@@ -32,7 +33,7 @@ async function main(): Promise<void> {
 		workspaceFolder: { uri: { fsPath: process.cwd() }, name: "omp-ui", index: 0 } as never,
 	});
 
-	const settled = Promise.withResolvers<void>();
+	const settled = deferred<void>();
 	controller.subscribe(message => {
 		frames.push({ atMs: Date.now() - started, message });
 		if (message.type === "events") {

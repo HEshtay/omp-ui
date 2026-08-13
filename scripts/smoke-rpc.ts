@@ -10,6 +10,7 @@
 import { OmpRpcClient } from "../src/rpc/client";
 import { applyEvent, createChatState } from "../src/shared/chat-model";
 import type { ChatState } from "../src/shared/chat-model";
+import { deferred } from "../src/shared/deferred";
 import type { AgentSessionEvent } from "../src/shared/protocol";
 
 const prompt = process.argv.slice(2).join(" ") || "Reply with exactly: bridge ok";
@@ -63,7 +64,7 @@ async function main(): Promise<void> {
 	const models = await client.request("get_available_models");
 	console.log(`[models] ${models.models.length} available`);
 
-	const done = Promise.withResolvers<void>();
+	const done = deferred<void>();
 	settled = done.resolve;
 	const timeout = setTimeout(() => done.reject(new Error("no terminal agent_end within 120s")), 120_000);
 

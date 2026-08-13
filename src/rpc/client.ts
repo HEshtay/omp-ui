@@ -1,5 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
+import { deferred } from "../shared/deferred";
 import { frameType, isRecord } from "../shared/guards";
 import { isAgentSessionEvent } from "../shared/protocol";
 import type {
@@ -106,7 +107,7 @@ export class OmpRpcClient {
 		this.#process = child;
 
 		const readyTimeout = this.options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS;
-		const ready = Promise.withResolvers<void>();
+		const ready = deferred<void>();
 		const readyTimer = setTimeout(() => {
 			this.#onReady = undefined;
 			ready.reject(new Error(`omp did not send a ready frame within ${readyTimeout / 1000}s`));
@@ -155,7 +156,7 @@ export class OmpRpcClient {
 		if (!this.running) return Promise.reject(new RpcClientError("omp is not running", type));
 		const id = `req_${++this.#nextRequestId}`;
 		const frame = { ...params, id, type } as RpcCommand;
-		const { promise, resolve, reject } = Promise.withResolvers<unknown>();
+		const { promise, resolve, reject } = deferred<unknown>();
 		this.#pending.set(id, { command: type, resolve, reject });
 		try {
 			this.#write(frame);
@@ -187,7 +188,7 @@ export class OmpRpcClient {
 		} catch {
 			// Already closed.
 		}
-		const exited = Promise.withResolvers<void>();
+		const exited = deferred<void>();
 		const killTimer = setTimeout(() => {
 			child.kill("SIGKILL");
 			exited.resolve();

@@ -16,6 +16,7 @@ import path from "node:path";
 import type { ChatSurface } from "../src/session/session-manager";
 import { SessionManager } from "../src/session/session-manager";
 import type { HostMessage } from "../src/shared/bridge";
+import { deferred } from "../src/shared/deferred";
 import { harness } from "./harness/vscode-stub";
 
 // Real session files, so `sessionFile` is meaningful.
@@ -70,7 +71,7 @@ class Recorder {
 
 	/** Resolve once a terminal `agent_end` has been seen. */
 	settled(timeoutMs: number): Promise<void> {
-		const done = Promise.withResolvers<void>();
+		const done = deferred<void>();
 		const deadline = setTimeout(() => done.reject(new Error(`${this.name}: no agent_end within ${timeoutMs}ms`)), timeoutMs);
 		const poll = setInterval(() => {
 			for (const message of this.messages) {

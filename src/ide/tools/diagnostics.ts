@@ -161,9 +161,7 @@ async function diagnosticsForFile(
   for (;;) {
     const found = vscode.languages.getDiagnostics(uri);
     if (found.length > 0 || Date.now() >= deadline) return { diagnostics: found, justOpened: true };
-    const settle = Promise.withResolvers<void>();
-    setTimeout(settle.resolve, SETTLE_POLL_MS);
-    await settle.promise;
+    await new Promise<void>((resolve) => setTimeout(resolve, SETTLE_POLL_MS));
   }
 }
 
