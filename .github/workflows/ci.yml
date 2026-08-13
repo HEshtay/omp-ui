@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # smoke:ide needs dist/mcp-shim.js, and drives it over a real socket
+      # against a real bridge. No `omp` binary and no credentials required,
+      # which is what makes it the gate that can run here.
+      - run: npm run build
+      - run: npm run smoke:ide
+
+      # Prove the artifact the team installs still builds from a clean checkout.
+      - run: npm run package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omp-ui-vsix
+          path: "*.vsix"
+          if-no-files-found: error

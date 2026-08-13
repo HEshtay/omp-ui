@@ -38,16 +38,29 @@ both message protocols, the state model, and the reasoning behind the key decisi
 
 ## Install
 
-No marketplace release yet — build the `.vsix` yourself:
+Download the latest `omp-ui-<version>.vsix` from
+[Releases](https://github.com/HEshtay/omp-ui/releases) — CI builds it from a clean
+checkout on every tag, so a whole team installs an identical artifact:
+
+```bash
+code --install-extension omp-ui-0.1.0.vsix
+```
+
+Then **reload the window**, and open the **OMP** view from the activity bar or
+press `Ctrl+Shift+Alt+O` (`Cmd+Shift+Alt+O` on macOS). The reload matters: the
+IDE bridge registers itself at activation, and `omp` reads MCP config only at
+agent startup.
+
+Rolling this out to a team, where each engineer uses their own Jira and GitHub
+credentials? Follow [`docs/onboarding.md`](docs/onboarding.md).
+
+To build the `.vsix` yourself instead — see [Development](#development) for the
+full loop:
 
 ```bash
 npm install
 npm run package
-code --install-extension omp-ui-0.1.0.vsix
 ```
-
-Then open the **OMP** view from the activity bar, or press `Ctrl+Shift+Alt+O`
-(`Cmd+Shift+Alt+O` on macOS).
 
 ## Features
 
