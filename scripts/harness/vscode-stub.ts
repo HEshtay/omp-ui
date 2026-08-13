@@ -63,6 +63,9 @@ export const workspace = {
 		get: <T>(key: string, fallback?: T): T | undefined => (CONFIG[key] as T | undefined) ?? fallback,
 	}),
 	asRelativePath: (value: unknown) => String(value),
+	// The IDE tools read the open buffers; in the harness nothing is open, which is
+	// a truthful answer rather than a plausible one.
+	textDocuments: [] as unknown[],
 	openTextDocument: () => {
 		throw new Error("openTextDocument is not available in the harness");
 	},
@@ -90,6 +93,12 @@ export const window = {
 		throw new Error("createWebviewPanel is not available in the harness");
 	},
 	activeTextEditor: undefined,
+	visibleTextEditors: [] as unknown[],
+	tabGroups: { all: [] as unknown[] },
+	// Left undefined on purpose: the terminal recorder and `terminal_read` probe
+	// for these with `typeof … === "function"` and must take the degraded path.
+	onDidStartTerminalShellExecution: undefined,
+	onDidEndTerminalShellExecution: undefined,
 };
 
 export const env = {

@@ -50,6 +50,7 @@ export interface SessionPanels {
 export interface SessionManagerDeps {
   output: vscode.LogOutputChannel;
   diffs: ControllerDeps["diffs"];
+  agentEnv?: ControllerDeps["agentEnv"];
 }
 
 /**
@@ -135,6 +136,80 @@ export class SessionManager implements vscode.Disposable {
   }
 
   /**
+   * Drop a project from the roster and terminate every session it owns.
+   *
+   * Refused when the project holds the window's last live session, for the
+   * same reason {@link closeSession} refuses: the switcher always shows one.
+   * The mint counter goes with the project — nothing of it survives, so a
+   * folder added again later starts from `#1`.
+   */
+  removeProject(projectId: string): void {
+    const project = this.#projects.get(projectId);
+    if (!project) return;
+
+    const owned = this.#sessionOrder.filter(
+      (id) => this.#sessions.get(id)?.entry.projectId === projectId,
+    );
+    if (owned.length > 0 && owned.length === this.#sessionOrder.length) {
+      this.#broadcast({
+        type: "notify",
+        level: "warning",
+        message: `Cannot remove ${project.label}: it holds the only open session.`,
+      });
+      return;
+    }
+
+    // Where the active session sat, so focus can land on whatever takes its
+    // slot rather than jumping to the top of the roster.
+    const activeIndex = this.#sessionOrder.indexOf(this.#activeId ?? "");
+    const droppedActive = owned.includes(this.#activeId ?? "");
+
+    for (const id of owned) {
+      const session = this.#sessions.get(id);
+      if (!session) continue;
+      this.#sessionOrder.splice(this.#sessionOrder.indexOf(id), 1);
+      this.#sessions.delete(id);
+      session.subscription.dispose();
+      session.controller.dispose();
+      this.panels?.close(id);
+    }
+
+    this.#projects.delete(projectId);
+    this.#projectOrder.splice(this.#projectOrder.indexOf(projectId), 1);
+    this.#minted.delete(projectId);
+
+    if (droppedActive) {
+      this.#activeId =
+        this.#sessionOrder[Math.min(activeIndex, this.#sessionOrder.length - 1)];
+      this.#onActiveChanged();
+      return;
+    }
+    this.#broadcastWorkspace();
+    this.#changed.fire();
+  }
+
+  /**
+   * Ask which registered project to drop, then {@link removeProject} it. The
+   * command-palette twin of the switcher's per-project remove button.
+   */
+  async removeFolder(): Promise<void> {
+    const projects = this.projects();
+    if (projects.length === 0) return;
+    const picked = await vscode.window.showQuickPick(
+      projects.map((project) => ({
+        label: project.label,
+        description: project.cwd,
+        id: project.id,
+      })),
+      {
+        title: "Remove project folder",
+        placeHolder: "Its sessions are closed and their agents terminated",
+      },
+    );
+    if (picked) this.removeProject(picked.id);
+  }
+
+  /**
    * Find the registered project whose cwd contains `uri`, if any. Used by the
    * `followActiveEditor` setting to auto-switch the chat.
    */
@@ -188,6 +263,7 @@ export class SessionManager implements vscode.Disposable {
     const controller = new ChatController({
       output: this.#deps.output,
       diffs: this.#deps.diffs,
+      agentEnv: this.#deps.agentEnv,
       workspaceFolder: undefined,
       cwd: project.cwd,
       label: project.label,
@@ -371,6 +447,9 @@ export class SessionManager implements vscode.Disposable {
         return;
       case "addProjectFolder":
         await this.addFolder();
+        return;
+      case "removeProjectFolder":
+        this.removeProject(message.projectId);
         return;
       default:
         break;

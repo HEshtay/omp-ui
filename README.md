@@ -43,7 +43,7 @@ Download the latest `omp-ui-<version>.vsix` from
 checkout on every tag, so a whole team installs an identical artifact:
 
 ```bash
-code --install-extension omp-ui-0.1.0.vsix
+code --install-extension omp-ui-0.2.0.vsix
 ```
 
 Then **reload the window**, and open the **OMP** view from the activity bar or
@@ -76,6 +76,18 @@ npm run package
   conversation, or compact it when the context gets long.
 - **Add selection to chat** — `Ctrl+Shift+Alt+L` on any editor selection.
 - **Export to HTML** for sharing a transcript.
+- **Workspace checkpoints.** Each turn is preceded by a snapshot of the work tree,
+  so a turn's file changes can be reverted from the transcript or with **OMP:
+  Revert Workspace to Checkpoint**. omp's own `checkpoint`/`rewind` rewind the
+  conversation, not the filesystem; this is the file-level undo. Needs a git work
+  tree. See `omp.checkpoints.enabled`.
+- **IDE-backed MCP tools.** The extension exposes this window's live IDE state to
+  the agent as twelve MCP tools — diagnostics, LSP navigation and symbols,
+  source-control diffs, tasks, structured test runs (`run_tests` reports counts
+  and per-failure `file:line`, not scraped terminal text), the active editor and
+  cursor, the unsaved contents of a buffer you are still editing, and your own
+  terminal's recent commands and exit codes — so it reads the IDE instead of
+  guessing with `grep`. See `omp.ideBridge.enabled`.
 
 ## Configuration
 
@@ -91,6 +103,9 @@ npm run package
 | `omp.autoScroll` | `true` | Follow the bottom of the transcript while streaming. |
 | `omp.sendKeybinding` | `enter` | Which key sends a message. With `enter`, `Shift+Enter` inserts a newline. |
 | `omp.followActiveEditor` | `false` | Switch the chat to the project folder of the active editor. |
+| `omp.ideBridge.enabled` | `true` | Expose IDE diagnostics, navigation, SCM diffs, tasks, test runs, editor state, and terminal output to the agent as MCP tools, registering a `vscode-ide` server in `~/.omp/agent/mcp.json`. Requires a window reload. |
+| `omp.checkpoints.enabled` | `true` | Snapshot the workspace before each turn so file changes can be reverted from the transcript. Requires a git work tree. |
+| `omp.testFramework` | `""` | Test framework for `run_tests`. Empty auto-detects from the project. |
 
 ## Development
 
@@ -102,14 +117,24 @@ npm run watch      # rebuild extension + webview on change
 Then press `F5` to launch an Extension Development Host.
 
 ```bash
-npm run typecheck      # tsc over both projects
-npm run smoke          # end-to-end RPC round-trip against a real omp process
-npm run smoke:sessions # multi-session / multi-project behaviour
+npm run typecheck        # tsc over both projects
+npm run smoke            # end-to-end RPC round-trip against a real omp process
+npm run smoke:sessions   # multi-session / multi-project behaviour
+npm run smoke:ide        # IDE bridge: real socket, real MCP shim, degraded mode
+npm run smoke:tests      # test-reporter parsing, one recorded payload per format
+npm run smoke:checkpoint # snapshot/restore round-trip in a throwaway git repo
 ```
 
-The smoke suites spawn a real `omp` binary, so they need the CLI installed and
-authenticated. `smoke:sessions` runs three concurrent agents across two projects
-and asserts session isolation, focus behaviour, and lifecycle transitions.
+`smoke` and `smoke:sessions` spawn a real `omp` binary, so they need the CLI
+installed and authenticated. `smoke:sessions` runs three concurrent agents across
+two projects and asserts session isolation, focus behaviour, and lifecycle
+transitions. `smoke:ide` needs no `omp` at all — it drives the built shim
+(`npm run build:extension` first) against a real bridge socket over raw MCP
+JSON-RPC. `smoke:tests` is offline too: it parses a recorded payload for each of
+the six reporter formats behind the seven supported frameworks, and asserts a
+malformed one yields nothing rather than a fake pass. `smoke:checkpoint` creates a
+real temporary git repository and asserts the snapshot/restore round-trip is
+byte-exact — binary files included, `.gitignore`d paths deliberately excluded.
 
 ## Layout
 
@@ -120,6 +145,8 @@ src/
   rpc/                agent process spawn + newline-delimited JSON framing
   session/            multi-session / multi-project bookkeeping
   view/               webview provider, editor panels, diff provider
+  ide/                IDE-as-MCP-server bridge: socket, shim, tool registry
+  checkpoint/         git-plumbing workspace snapshots for turn-level undo
   shared/             protocol types and the chat model (host ⇄ webview)
 webview/src/          React renderer
 scripts/              smoke tests and dev harness

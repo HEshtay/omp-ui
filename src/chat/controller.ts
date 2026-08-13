@@ -1,10 +1,12 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as vscode from "vscode";
+import { CheckpointStore } from "../checkpoint/store";
 import { OmpRpcClient, RpcClientError } from "../rpc/client";
 import { listSessions } from "../session/session-store";
 import type {
 	AgentStatus,
+	CheckpointEntry,
 	DialogAnswer,
 	DraftState,
 	HostMessage,
@@ -38,6 +40,13 @@ import type { DiffContentProvider } from "../view/diff-provider";
 
 /** Streaming deltas are coalesced into one postMessage per frame budget. */
 const EVENT_FLUSH_MS = 33;
+
+/**
+ * Namespace for this controller's checkpoint refs. Uniqueness only has to hold
+ * among the live sessions of one window; a stale namespace left by a crashed
+ * window is simply reused, and its refs overwritten.
+ */
+let nextCheckpointScope = 1;
 
 export interface ControllerDeps {
   output: vscode.LogOutputChannel;
@@ -84,6 +93,9 @@ export class ChatController implements vscode.Disposable {
   #flushTimer: NodeJS.Timeout | undefined;
   #starting: Promise<void> | undefined;
   #disposed = false;
+  #checkpoints: CheckpointStore | undefined;
+  #checkpointInit: Promise<void> | undefined;
+  readonly #checkpointScope = `s${nextCheckpointScope++}`;
 
   #session: SessionSnapshot;
 
@@ -123,7 +135,25 @@ export class ChatController implements vscode.Disposable {
       dialogs: [...this.#dialogs.values()],
       subagents: [...this.#subagents.values()],
       config: readUiConfig(),
+      checkpoints: this.#checkpointEntries(),
     };
+  }
+
+  /**
+   * Bind each snapshot to the user message it precedes. The store records a
+   * turn ordinal because it snapshots *before* the reducer has minted the
+   * item, so the id only becomes knowable once the turn has started.
+   */
+  #checkpointEntries(): CheckpointEntry[] {
+    const records = this.#checkpoints?.records ?? [];
+    if (records.length === 0) return [];
+    const userItems = this.#chat.items.filter((item) => item.kind === "user");
+    return records.map((record) => ({
+      id: record.id,
+      itemId: userItems[record.turnIndex]?.id,
+      createdAt: record.createdAt,
+      label: record.label,
+    }));
   }
 
   get draft(): DraftState {
@@ -156,6 +186,7 @@ export class ChatController implements vscode.Disposable {
     this.#chat = createChatState();
     this.#dialogs.clear();
     this.#subagents.clear();
+    await this.#clearCheckpoints();
     this.#pushSnapshot();
     await this.start();
   }
@@ -519,6 +550,7 @@ export class ChatController implements vscode.Disposable {
         }
         this.#chat = createChatState();
         this.#subagents.clear();
+        await this.#clearCheckpoints();
         await this.#refreshState();
         this.#pushSnapshot();
         return;
@@ -537,6 +569,7 @@ export class ChatController implements vscode.Disposable {
           return;
         }
         this.#subagents.clear();
+        await this.#clearCheckpoints();
         await this.#refreshState();
         await this.#hydrateMessages();
         this.#pushSnapshot();
@@ -578,12 +611,17 @@ export class ChatController implements vscode.Disposable {
           });
           return;
         }
+        await this.#clearCheckpoints();
         await this.#refreshState();
         await this.#hydrateMessages();
         this.#pushSnapshot();
         if (data.text) this.#post({ type: "setComposerText", text: data.text });
         return;
       }
+
+      case "revertCheckpoint":
+        await this.revertCheckpoint(message.id);
+        return;
 
       case "exportHtml": {
         const data = await this.#require().request("export_html");
@@ -740,6 +778,9 @@ export class ChatController implements vscode.Disposable {
     const payload = { message: text, ...(images.length > 0 ? { images } : {}) };
 
     if (!this.#session.isStreaming) {
+      // Only a fresh turn gets a snapshot: steering and follow-ups join a turn
+      // whose pre-state is already captured.
+      await this.#takeCheckpoint(text);
       await client.request("prompt", payload);
       return;
     }
@@ -749,6 +790,117 @@ export class ChatController implements vscode.Disposable {
       ...payload,
       streamingBehavior: behavior ?? "steer",
     });
+  }
+
+  // -----------------------------------------------------------------------
+  // Workspace checkpoints
+  // -----------------------------------------------------------------------
+
+  /**
+   * The store is created on first use rather than in the constructor: probing
+   * for a git work tree costs a subprocess, and a session may never prompt.
+   */
+  async #checkpointStore(): Promise<CheckpointStore | undefined> {
+    if (!vscode.workspace.getConfiguration("omp").get<boolean>("checkpoints.enabled", true)) {
+      return undefined;
+    }
+    this.#checkpointInit ??= (async () => {
+      this.#checkpoints = await CheckpointStore.create(
+        this.#session.cwd,
+        this.#checkpointScope,
+        this.deps.output,
+      );
+    })();
+    await this.#checkpointInit;
+    return this.#checkpoints;
+  }
+
+  async #takeCheckpoint(prompt: string): Promise<void> {
+    try {
+      const store = await this.#checkpointStore();
+      if (!store) return;
+      const turnIndex = this.#chat.items.filter((item) => item.kind === "user").length;
+      // The store owns label clipping; this only picks the line worth keeping.
+      const label = prompt.split("\n", 1)[0]?.trim() ?? "";
+      if (await store.snapshot(turnIndex, label)) {
+        this.#post({ type: "checkpoints", checkpoints: this.#checkpointEntries() });
+      }
+    } catch (error) {
+      // A failed snapshot must never block the turn the user asked for.
+      this.deps.output.warn(`workspace checkpoint skipped: ${describe(error)}`);
+    }
+  }
+
+  /**
+   * Reverting discards work, so it is gated on a modal that states the blast
+   * radius in files rather than a toast the user can miss.
+   */
+  async revertCheckpoint(id: string): Promise<void> {
+    const store = await this.#checkpointStore();
+    const record = store?.find(id);
+    if (!store || !record) {
+      this.#post({
+        type: "notify",
+        level: "warning",
+        message: "That checkpoint is no longer available.",
+      });
+      return;
+    }
+
+    const preview = await store.preview(id);
+    if (preview.files === 0) {
+      this.#post({
+        type: "notify",
+        level: "info",
+        message: "Nothing to revert — the workspace already matches that checkpoint.",
+      });
+      return;
+    }
+
+    const confirmed = await vscode.window.showWarningMessage(
+      `Revert ${preview.files} file${preview.files === 1 ? "" : "s"} to the state before “${record.label}”?`,
+      { modal: true, detail: `${preview.stat}\n\nUncommitted work in these files will be lost.` },
+      "Revert Files",
+    );
+    if (confirmed !== "Revert Files") return;
+
+    const changed = await store.restore(id);
+    this.#post({
+      type: "notify",
+      level: "info",
+      message: `Reverted ${changed} file${changed === 1 ? "" : "s"}. The conversation is unchanged.`,
+    });
+  }
+
+  /** Offer this session's checkpoints, newest first, as a quick pick. */
+  async pickAndRevertCheckpoint(): Promise<void> {
+    const store = await this.#checkpointStore();
+    const records = [...(store?.records ?? [])].reverse();
+    if (records.length === 0) {
+      void vscode.window.showInformationMessage(
+        "No workspace checkpoints yet. One is taken before each turn, in git repositories only.",
+      );
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      records.map((record) => ({
+        label: record.label.length > 0 ? record.label : "(empty prompt)",
+        description: new Date(record.createdAt).toLocaleTimeString(),
+        detail: record.id.slice(0, 8),
+        id: record.id,
+      })),
+      { title: "Revert workspace to the state before…", matchOnDetail: true },
+    );
+    if (picked) await this.revertCheckpoint(picked.id);
+  }
+
+  /**
+   * A reset, switch or branch renumbers the turns the records are keyed by, so
+   * the refs are dropped rather than left pointing at the wrong message.
+   */
+  async #clearCheckpoints(): Promise<void> {
+    await this.#checkpoints?.clear();
+    this.#post({ type: "checkpoints", checkpoints: [] });
   }
 
   #answerDialog(id: string, answer: DialogAnswer): void {
@@ -1025,6 +1177,7 @@ export class ChatController implements vscode.Disposable {
     this.#disposed = true;
     clearTimeout(this.#flushTimer);
     this.#listeners.clear();
+    this.#checkpoints?.dispose();
     void this.#client?.dispose();
   }
 }

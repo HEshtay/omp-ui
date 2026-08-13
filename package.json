@@ -2,7 +2,7 @@
   "name": "omp-ui",
   "displayName": "OMP",
   "description": "A graphical front-end for the omp coding agent, wired into VS Code.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "omp",
   "license": "MIT",
   "private": true,
@@ -123,7 +123,13 @@
         "command": "omp.addProjectFolder",
         "title": "Add Project Folder...",
         "category": "OMP",
-        "icon": "$(folder-add)"
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "omp.removeProjectFolder",
+        "title": "Remove Project Folder...",
+        "category": "OMP",
+        "icon": "$(trash)"
       },
       {
         "command": "omp.resetSession",
@@ -131,8 +137,18 @@
         "category": "OMP"
       },
       {
+        "command": "omp.revertCheckpoint",
+        "title": "Revert Workspace to Checkpoint",
+        "category": "OMP"
+      },
+      {
         "command": "omp.closeSession",
         "title": "Close Session",
+        "category": "OMP"
+      },
+      {
+        "command": "omp.registerIdeBridge",
+        "title": "Register IDE Bridge with omp",
         "category": "OMP"
       }
     ],
@@ -303,6 +319,31 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Automatically switch the OMP chat to the project folder containing the active editor."
+        },
+        "omp.ideBridge.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Expose this window's IDE state to the agent as MCP tools — diagnostics, LSP navigation and symbols, source-control diffs, tasks, tests, editor state, and terminal history. Registers a `vscode-ide` stdio MCP server in `~/.omp/agent/mcp.json`; sessions started outside this extension see no tools from it. Requires a window reload."
+        },
+        "omp.checkpoints.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Snapshot the workspace before each turn so the agent's file changes can be reverted from the transcript. Requires a git work tree; `.gitignore`d paths are not snapshotted."
+        },
+        "omp.testFramework": {
+          "type": "string",
+          "enum": [
+            "",
+            "vitest",
+            "jest",
+            "mocha",
+            "pytest",
+            "cargo",
+            "go",
+            "dotnet"
+          ],
+          "default": "",
+          "markdownDescription": "Test framework the `run_tests` IDE tool drives. Empty auto-detects from the project."
         }
       }
     }
@@ -315,6 +356,9 @@
     "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
     "smoke": "esbuild scripts/smoke-rpc.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/smoke-rpc.cjs && node dist/smoke-rpc.cjs",
     "smoke:sessions": "esbuild scripts/smoke-sessions.ts --bundle --platform=node --target=node20 --format=cjs --alias:vscode=./scripts/harness/vscode-stub.ts --outfile=dist/smoke-sessions.cjs && node dist/smoke-sessions.cjs",
+    "smoke:ide": "esbuild scripts/smoke-ide-bridge.ts --bundle --platform=node --target=node20 --format=cjs --alias:vscode=./scripts/harness/vscode-stub.ts --outfile=dist/smoke-ide-bridge.cjs && node dist/smoke-ide-bridge.cjs",
+    "smoke:tests": "esbuild scripts/smoke-tests-tool.ts --bundle --platform=node --target=node20 --format=cjs --alias:vscode=./scripts/harness/vscode-stub.ts --outfile=dist/smoke-tests-tool.cjs && node dist/smoke-tests-tool.cjs",
+    "smoke:checkpoint": "esbuild scripts/smoke-checkpoint.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/smoke-checkpoint.cjs && node dist/smoke-checkpoint.cjs",
     "package": "npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build"
   },

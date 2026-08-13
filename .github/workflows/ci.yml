@@ -22,10 +22,16 @@ jobs:
 
       - run: npm run build
 
-      # Add `npm run smoke:ide` here in the same commit that lands `src/ide/`.
-      # It drives the built shim over a real socket and needs no `omp` binary
-      # and no credentials, so it belongs in this gate — but the script only
-      # exists alongside the bridge, and a gate must never skip silently.
+      # Every smoke that needs neither an `omp` binary nor credentials belongs
+      # in this gate. `smoke` and `smoke:sessions` do need both, so they stay
+      # out: a gate must never skip silently.
+      - run: npm run smoke:ide
+
+      - run: npm run smoke:tests
+
+      # Creates its own throwaway repo and configures an identity in it, so it
+      # needs nothing from the runner but `git`.
+      - run: npm run smoke:checkpoint
 
       # Prove the artifact the team installs still builds from a clean checkout.
       - run: npm run package

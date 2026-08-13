@@ -48,3 +48,9 @@ export const ICON_BRANCH_NODES: Array<[number, number]> = [
 export const ICON_OVERFLOW = "M8 3.4h.01M8 8h.01M8 12.6h.01";
 export const ICON_CLOSE = "M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8";
 export const ICON_CHEVRON = "M4.8 6.4 8 9.6l3.2-3.2";
+/* Folder outline, then a plus centred in its body. */
+export const ICON_FOLDER_ADD =
+  "M2.6 12.6V4.2h3.2l1.4 1.8h6.2v6.6zM8 7.9v2.8M6.6 9.3h2.8";
+/* Lid, then the can. */
+export const ICON_TRASH =
+  "M2.8 4.6h10.4M6.4 4.6V3.2h3.2v1.4M4.2 4.6l.6 8.2h6.4l.6-8.2";

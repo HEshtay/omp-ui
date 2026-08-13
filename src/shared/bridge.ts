@@ -133,6 +133,24 @@ export interface SessionStatus {
   hasPendingDialog: boolean;
 }
 
+/**
+ * A workspace snapshot taken immediately before a turn, offered back as a
+ * revert target.
+ *
+ * omp's own `checkpoint`/`rewind` tools move the conversation pointer and
+ * deliberately leave the filesystem alone, so a file-level undo can only exist
+ * out here. `itemId` binds the snapshot to the user message it precedes, which
+ * the host resolves by turn ordinal once the reducer has minted that item.
+ */
+export interface CheckpointEntry {
+  /** Commit sha of the snapshot tree. */
+  id: string;
+  itemId?: string;
+  createdAt: number;
+  /** Clipped first line of the prompt that followed. */
+  label: string;
+}
+
 export interface UiConfig {
   showThinking: boolean;
   autoScroll: boolean;
@@ -147,6 +165,7 @@ export interface UiSnapshot {
   dialogs: UiDialog[];
   subagents: SubagentState[];
   config: UiConfig;
+  checkpoints: CheckpointEntry[];
 }
 
 /** Composer text the user is drafting, persisted across webview disposal. */
@@ -177,6 +196,7 @@ export type HostMessage =
   /** The project's saved sessions on disk, for the resume menu. */
   | { type: "savedSessions"; sessions: SessionListEntry[] }
   | { type: "branchPoints"; messages: Array<{ entryId: string; text: string }> }
+  | { type: "checkpoints"; checkpoints: CheckpointEntry[] }
   | {
       type: "workspace";
       projects: ProjectEntry[];
@@ -228,6 +248,8 @@ export type WebviewMessage =
   | { type: "setSessionName"; name: string }
   | { type: "requestBranchPoints" }
   | { type: "branch"; entryId: string }
+  /** Restore the working tree to the snapshot taken before a given turn. */
+  | { type: "revertCheckpoint"; id: string }
   | { type: "exportHtml" }
   | { type: "restartAgent" }
   | { type: "refreshState" }

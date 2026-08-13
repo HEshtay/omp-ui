@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type {
+	CheckpointEntry,
 	DraftState,
 	HostMessage,
 	ProjectEntry,
@@ -31,6 +32,11 @@ export interface UiState {
 	/** Saved sessions on disk, for the resume menu. */
 	savedSessions: SessionListEntry[];
 	branchPoints: Array<{ entryId: string; text: string }>;
+	/**
+	 * Revertable workspace snapshots, keyed for lookup by the transcript id of
+	 * the user message each one precedes.
+	 */
+	checkpointsByItem: Record<string, CheckpointEntry>;
 	toasts: Toast[];
 	/** Output emitted by local-only slash commands, newest last. */
 	commandOutput: string[];
@@ -73,6 +79,7 @@ function initialState(): UiState {
 		config: { showThinking: true, autoScroll: true, sendKeybinding: "enter" },
 		savedSessions: [],
 		branchPoints: [],
+		checkpointsByItem: {},
 		toasts: [],
 		commandOutput: [],
 		draft: { text: "", images: [] },
@@ -138,6 +145,7 @@ class UiStore {
 					dialogs: message.snapshot.dialogs,
 					subagents: message.snapshot.subagents,
 					config: message.snapshot.config,
+					checkpointsByItem: indexCheckpoints(message.snapshot.checkpoints),
 					draft: message.draft,
 					hydrated: true,
 				});
@@ -165,6 +173,10 @@ class UiStore {
 
 			case "todos":
 				this.#set({ ...state, chat: { ...state.chat, todoPhases: message.phases } });
+				return;
+
+			case "checkpoints":
+				this.#set({ ...state, checkpointsByItem: indexCheckpoints(message.checkpoints) });
 				return;
 
 			case "subagents":
@@ -246,6 +258,18 @@ class UiStore {
 				return;
 		}
 	}
+}
+
+/**
+ * A snapshot only becomes offerable once the host has bound it to a transcript
+ * item, so unbound entries are dropped rather than rendered against nothing.
+ */
+function indexCheckpoints(checkpoints: readonly CheckpointEntry[]): Record<string, CheckpointEntry> {
+	const byItem: Record<string, CheckpointEntry> = {};
+	for (const checkpoint of checkpoints) {
+		if (checkpoint.itemId !== undefined) byItem[checkpoint.itemId] = checkpoint;
+	}
+	return byItem;
 }
 
 export const store = new UiStore();

@@ -4,7 +4,14 @@ import type { SessionEntry } from "../../../src/shared/bridge";
 import type { UiState } from "../store";
 import { useUi } from "../store";
 import { post } from "../vscode";
-import { ICON_CHEVRON, ICON_CLOSE, ICON_NEW, Icon } from "./Icon";
+import {
+  ICON_CHEVRON,
+  ICON_CLOSE,
+  ICON_FOLDER_ADD,
+  ICON_NEW,
+  ICON_TRASH,
+  Icon,
+} from "./Icon";
 import { Popover } from "./Popover";
 import "./chrome.css";
 
@@ -18,6 +25,13 @@ function sessionLabel(entry: SessionEntry): string {
   return entry.name?.trim() || `Session #${entry.ordinal}`;
 }
 
+/** Removing a project takes its live sessions with it — say so up front. */
+function removeTitle(label: string, owned: number): string {
+  if (owned === 0) return `Remove ${label}`;
+  const sessions = owned === 1 ? "session" : `${owned} sessions`;
+  return `Remove ${label} and close its ${sessions}`;
+}
+
 /**
  * Project + session switcher for the top of every chat surface.
  *
@@ -26,7 +40,9 @@ function sessionLabel(entry: SessionEntry): string {
  * `selectSession`: the host focuses it and reveals its editor panel, so two
  * conversations can be watched at the same time. Rows carry the badges fed by
  * `sessionStatus` (streaming spinner / awaiting-approval dot), which is the
- * point of the switcher: seeing what a *background* session is doing.
+ * point of the switcher: seeing what a *background* session is doing. Each
+ * project heading also removes the project (`removeProjectFolder`), which the
+ * host refuses if it would leave the window with no session at all.
  */
 export function SessionSwitcher(): ReactElement {
   const projects = useUi(selectProjects);
@@ -87,6 +103,10 @@ export function SessionSwitcher(): ReactElement {
           const owned = sessions.filter(
             (session) => session.projectId === entry.id,
           );
+          // The host refuses a removal that would leave the window sessionless.
+          const canRemove = sessions.some(
+            (session) => session.projectId !== entry.id,
+          );
           return (
             <div key={entry.id}>
               <div className="popover-group project-group">
@@ -106,6 +126,18 @@ export function SessionSwitcher(): ReactElement {
                 >
                   <Icon path={ICON_NEW} />
                 </button>
+                {canRemove ? (
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title={removeTitle(entry.label, owned.length)}
+                    onClick={() =>
+                      post({ type: "removeProjectFolder", projectId: entry.id })
+                    }
+                  >
+                    <Icon path={ICON_TRASH} />
+                  </button>
+                ) : null}
               </div>
 
               {owned.length === 0 ? (
@@ -174,7 +206,10 @@ export function SessionSwitcher(): ReactElement {
             post({ type: "addProjectFolder" });
           }}
         >
-          Add folder…
+          <span className="row">
+            <Icon path={ICON_FOLDER_ADD} />
+            Add folder…
+          </span>
         </button>
       </Popover>
     </>

@@ -31,7 +31,7 @@ Download the latest `omp-ui-<version>.vsix` from the repository's
 own, so the whole team runs an identical, CI-verified build.
 
 ```bash
-code --install-extension omp-ui-0.1.0.vsix
+code --install-extension omp-ui-0.2.0.vsix
 ```
 
 Then **reload the window**. The IDE bridge registers itself at activation and

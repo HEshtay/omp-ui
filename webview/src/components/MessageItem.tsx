@@ -40,6 +40,8 @@ function imageSource(image: ImageContent): string | null {
 function UserBubble({ item }: { item: UserItem }): ReactElement | null {
 	const text = typeof item.text === "string" ? item.text : "";
 	const images = Array.isArray(item.images) ? item.images : [];
+	const select = useCallback((state: UiState) => state.checkpointsByItem[item.id], [item.id]);
+	const checkpoint = useUi(select);
 	if (text.trim().length === 0 && images.length === 0) return null;
 
 	return (
@@ -57,6 +59,16 @@ function UserBubble({ item }: { item: UserItem }): ReactElement | null {
 					</div>
 				) : null}
 			</div>
+			{checkpoint === undefined ? null : (
+				<button
+					type="button"
+					className="tx-revert"
+					title="Restore every file to its state before this message. The conversation is left alone."
+					onClick={() => post({ type: "revertCheckpoint", id: checkpoint.id })}
+				>
+					Revert files to here
+				</button>
+			)}
 		</div>
 	);
 }

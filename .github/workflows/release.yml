@@ -33,7 +33,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
-      # Add `npm run smoke:ide` here together with `src/ide/`, matching ci.yml.
+      # Same credential-free gate as ci.yml: a release must not ship a build
+      # that CI would have rejected.
+      - run: npm run smoke:ide
+      - run: npm run smoke:tests
+      - run: npm run smoke:checkpoint
       - run: npm run package
 
       - name: Publish release

@@ -132,6 +132,35 @@
 	background: var(--user-bg);
 }
 
+/*
+ * Reverting is destructive, so the control stays quiet until the row is hovered
+ * rather than advertising itself on every turn.
+ */
+.tx-revert {
+	align-self: flex-end;
+	padding: 1px 6px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--fg-faint);
+	font: inherit;
+	font-size: 0.85em;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 90ms linear;
+}
+
+.tx-msg-user:hover .tx-revert,
+.tx-revert:focus-visible {
+	opacity: 1;
+}
+
+.tx-revert:hover {
+	color: var(--fg);
+	border-color: color-mix(in srgb, var(--err) 55%, transparent);
+	background: color-mix(in srgb, var(--err) 12%, transparent);
+}
+
 .tx-images {
 	display: flex;
 	flex-wrap: wrap;

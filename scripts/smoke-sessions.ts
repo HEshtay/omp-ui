@@ -253,6 +253,51 @@ async function main(): Promise<void> {
 		`${spawnedOrdinal} > [${usedOrdinals.join(",")}]`,
 	);
 
+	// Removing a project takes its sessions — and their agents — with it, but
+	// never the window's last one.
+	const beforeRemoval = manager.sessions().length;
+	const ownedByB = manager.sessions().filter(entry => entry.projectId === projectB).length;
+	const beforeRefusal = sidebar.messages.length;
+	manager.removeProject(projectB);
+	check(
+		"the project holding every session cannot be removed",
+		manager.projects().some(entry => entry.id === projectB) && manager.sessions().length === beforeRemoval,
+		`${manager.projects().length} projects, ${manager.sessions().length} sessions`,
+	);
+	check(
+		"refusing to remove the last project warns the user",
+		sidebar.messages.slice(beforeRefusal).some(message => message.type === "notify" && message.level === "warning"),
+	);
+
+	// With a second project registered again, project B becomes removable.
+	manager.registerProject({ id: projectA, cwd: projectA, label: "omp-ui" });
+	const survivor = manager.createSession(projectA);
+	manager.removeProject(projectB);
+	check(
+		"removing a project drops it from the roster",
+		manager.projects().every(entry => entry.id !== projectB),
+		manager.projects().map(entry => entry.label).join(","),
+	);
+	check(
+		"removing a project closes every session it owned",
+		manager.sessions().every(entry => entry.projectId !== projectB) && manager.sessions().length === 1,
+		`${ownedByB} owned -> ${manager.sessions().length} left`,
+	);
+	check("removing a project closes its panels", closed.includes(b2 ?? ""), closed.join(","));
+	check(
+		"focus moves off a removed project's session",
+		manager.activeSessionId === survivor,
+		String(manager.activeSessionId),
+	);
+	// Nothing of a removed project survives, so re-adding the folder starts over.
+	manager.registerProject({ id: projectB, cwd: projectB, label: "scratch" });
+	const readded = manager.createSession(projectB);
+	check(
+		"a re-added folder mints ordinals from scratch",
+		manager.sessionEntry(readded ?? "")?.ordinal === 1,
+		String(manager.sessionEntry(readded ?? "")?.ordinal),
+	);
+
 	manager.dispose();
 	// Controller teardown is async and detached from dispose().
 	await new Promise(resolve => setTimeout(resolve, 800));

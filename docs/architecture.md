@@ -183,17 +183,21 @@ src/                        # Extension host (Node)
 ├── extension.ts            # Activation, DI wiring, command registration
 ├── chat/
 │   └── controller.ts       # ChatController: orchestrator, owns agent + state
+├── checkpoint/
+│   └── store.ts            # CheckpointStore: git-plumbing work-tree snapshots
 ├── ide/                    # IDE-as-MCP-server bridge (§7)
 │   ├── protocol.ts         # Host ⇄ shim IPC contract (types + env var names)
 │   ├── bridge-server.ts    # IdeBridgeServer: named pipe / unix socket listener
 │   ├── mcp-shim.ts         # Standalone MCP stdio server omp launches
 │   ├── registration.ts     # Idempotent ~/.omp/agent/mcp.json merge
+│   ├── terminal-recorder.ts # Passive ring buffer of the user's own shell runs
 │   └── tools/              # The tools the agent actually sees
 │       ├── types.ts        # IdeTool + IdeToolContext
 │       ├── registry.ts     # ideTools: the single list the bridge serves
 │       ├── format.ts       # MAX_RESULT_CHARS + truncate() + shared formatting
 │       ├── diagnostics.ts / navigate.ts / symbols.ts
-│       └── scm.ts / tasks.ts
+│       ├── scm.ts / tasks.ts / tests.ts
+│       └── editor.ts / terminal.ts
 ├── rpc/                    # Agent wire protocol
 │   ├── client.ts           # OmpRpcClient: spawn, framing, dispatch, request()
 │   ├── frame.ts            # RpcFrameDecoder: v2 chunk reassembly
@@ -244,6 +248,8 @@ webview/                    # React renderer (Vite)
 scripts/                    # Dev-only harnesses (not shipped)
 ├── smoke-rpc.ts            # E2E RPC smoke test outside VS Code
 ├── smoke-sessions.ts       # E2E multi-session/multi-project smoke test
+├── smoke-tests-tool.ts     # run_tests reporter parsing, offline fixtures
+├── smoke-checkpoint.ts     # Checkpoint snapshot/restore in a temp git repo
 ├── record-session.ts       # Record a live session to a HostMessage stream
 ├── serve-harness.mjs       # Serve the built webview with a stubbed bridge
 └── harness/vscode-stub.ts  # Minimal fake `vscode` module for harness runs
@@ -314,10 +320,11 @@ registers everything:
   panels into it.
 - Registers the webview view provider (sidebar `omp.chatView`, with
   `retainContextWhenHidden`) and the `omp-diff://` content provider.
-- Registers 17 commands (`omp.openChat`, `omp.newSession`, `omp.closeSession`,
-  `omp.abort`, `omp.registerIdeBridge`, etc.) and the single
-  configuration-change listener that offers an agent restart when a launch-time
-  setting changes, or a window reload when `omp.ideBridge.enabled` changes.
+- Registers 18 commands (`omp.openChat`, `omp.newSession`, `omp.closeSession`,
+  `omp.abort`, `omp.registerIdeBridge`, `omp.revertCheckpoint`, etc.) and the
+  single configuration-change listener that offers an agent restart when a
+  launch-time setting changes, or a window reload when `omp.ideBridge.enabled`
+  changes.
 
 ### 6.2 `ChatController` (`src/chat/controller.ts`)
 
@@ -432,6 +439,48 @@ A diagram mermaid refused has no SVG to reuse; its source opens as text instead.
 - Expansion state survives virtualized unmount/remount via a module-level
   `Map<toolCallId, boolean>` — a user decision, not conversation state.
 
+### 6.11 Checkpoint store (`src/checkpoint/store.ts`)
+
+omp's own `checkpoint` and `rewind` tools rewind the *conversation*. They do not
+snapshot the filesystem — whatever the tool summary implies — and omp defaults to
+`yolo` approval, so an unattended turn can rewrite a work tree with nothing to
+undo it. The front-end is the only place that undo can exist today, and
+`CheckpointStore` is it: the work tree is captured before each turn, and
+`omp.revertCheckpoint` puts it back.
+
+Capture is **git plumbing only** — never the porcelain a developer's own commands
+share:
+- `git add -A` runs against a temporary `GIT_INDEX_FILE`, so the real index never
+  sees it. `git write-tree` turns that scratch index into a tree object, and
+  `git commit-tree` wraps the tree in a **parentless** commit.
+- A ref at `refs/omp/checkpoints/<session>/<turn>` anchors that commit, which is
+  what keeps it alive against garbage collection while keeping it out of
+  `refs/heads`.
+- Restoring captures the *current* tree the same way, then applies
+  `git diff --binary <now> <checkpoint>` forward with `git apply --binary`. The
+  diff runs now → checkpoint, so its deletion hunks remove files the turn created
+  and its additions bring back files the turn deleted; the same pair with `--stat`
+  is the preview the UI shows before touching anything. A patch rather than a
+  checkout, so only files that actually differ are rewritten, and `--binary` so an
+  image or a compiled fixture round-trips byte for byte.
+
+Each snapshot is recorded as a `CheckpointEntry` (`src/shared/bridge.ts`): the
+commit sha, the transcript item the turn produced, and a clipped label taken from
+the prompt — which is what lets the transcript offer *revert to here* against a
+specific message rather than a bare list of shas.
+
+Two consequences are deliberate, not gaps:
+1. **HEAD, the index, the stash, and branches are never touched** — by
+   construction, not by care: no command in the store reads or writes any of them,
+   and `update-ref` only ever names `refs/omp/*`. A snapshot is invisible to
+   `git status`, `git log`, and the SCM view, and a revert leaves staged work
+   exactly as the developer left it. The store borrows git's object database and
+   nothing else.
+2. **`.gitignore`d paths are outside the snapshot.** Build output, caches, and
+   local databases are neither captured nor restored, because `git add -A` does not
+   see them. This is the same boundary git itself draws, and it is the caveat the UI
+   has to state out loud: "undo" otherwise promises more than it delivers.
+
 ---
 ## 7. The IDE Bridge: this Window as an MCP Server
 
@@ -439,9 +488,31 @@ A diagram mermaid refused has no SVG to reuse; its source opens as text instead.
 
 The agent's default view of a repository is the file system. Everything VS Code
 already knows — the language server's diagnostics, its definition and reference
-graph, the symbol index, the SCM diff, the task list — is invisible to it, so it
-re-derives a worse approximation with `grep`. This layer hands that state over as
-**MCP tools**, which the agent *pulls* on demand.
+graph, the symbol index, the SCM diff, the task list, the test runner's own
+results, the file and cursor the user is looking at, the buffer they have not saved
+yet, what their terminal just printed — is invisible to it, so it re-derives a
+worse approximation with `grep`. This layer hands that state over as **MCP
+tools**, which the agent *pulls* on demand.
+
+Twelve tools, in eight modules:
+
+| Tool | Module | What the agent gets |
+|---|---|---|
+| `diagnostics` | `diagnostics.ts` | The Problems panel: live language-server and linter errors, with no build step |
+| `definition`, `references` | `navigate.ts` | Where a symbol is defined, and every real call site — resolved through imports and re-exports |
+| `symbols` | `symbols.ts` | Fuzzy workspace symbol search, or one file's symbol tree with line numbers |
+| `scm_diff` | `scm.ts` | The working tree (or the index) against HEAD as unified patch text, or a name+status summary |
+| `list_tasks`, `run_task` | `tasks.ts` | This workspace's configured tasks, and one run's exit code plus terminal output |
+| `list_tests`, `run_tests` | `tests.ts` | The project's own test runner, driven through its machine-readable reporter: counts, per-failure `file:line`, and a `rerun: "failed"` selector |
+| `editor_state`, `read_buffer` | `editor.ts` | Active file, cursor, selection, visible range, open editors, which files are unsaved — and the authoritative unsaved contents of one of them |
+| `terminal_read` | `terminal.ts` | The user's own recent terminal commands, their exit codes, and their output |
+
+`run_tests` is a sibling of `run_task`, not a replacement: a task hands back text
+the model has to re-read and re-guess at, a test run hands back structure it can
+branch on. `terminal_read` is answered from `src/ide/terminal-recorder.ts`, a
+passive ring buffer over the shell-integration events — the extension records what
+the user's own terminals do, so the tool has something true to say instead of
+re-running the command.
 
 ### 7.1 Two-hop topology
 
@@ -515,6 +586,13 @@ deliberately strict:
 - Bad arguments `throw`; the host turns a throw into `{ isError: true }`, so one
   bad call never takes the bridge down.
 
+`run_tests` is the tool that most looks like an exception and is not. "Structured"
+describes where the parsing happens, not what crosses the wire: the tool reads the
+runner's machine-readable reporter and *renders* it as the same line-oriented text
+every other tool returns — a counts summary, then one line per failure carrying
+its `path:line` and its message. The model is spared the scraping; it is not
+handed a JSON blob to re-parse.
+
 ### 7.4 Registration & lifecycle
 
 `src/ide/registration.ts` merges our entry into `~/.omp/agent/mcp.json` on every
@@ -572,6 +650,20 @@ Code host:
   unknown-tool call that must come back as an error result instead of a crash. A
   second shim spawned with no bridge address asserts the degraded contract
   (handshake succeeds, zero tools, nothing on stderr). Needs no `omp` binary.
+- **`smoke-tests-tool.ts`** (`npm run smoke:tests`) — feeds a recorded reporter
+  payload for each of the six output formats (Jest-style JSON, mocha JSON, pytest
+  JUnit XML, `go test -json`, cargo's libtest text plus nextest's NDJSON, dotnet
+  TRX) through the `run_tests` parsers and asserts the typed result: counts,
+  per-failure `file:line`, and the rerun selector. A malformed payload must parse
+  to *nothing* rather than a fake all-green — the failure mode that would matter
+  most. Entirely offline: no runner, no `omp`, no VS Code, because the parsers are
+  where this tool is right or wrong.
+- **`smoke-checkpoint.ts`** (`npm run smoke:checkpoint`) — creates a real git
+  repository in a temp directory and drives `CheckpointStore` through
+  snapshot → mutate → restore, asserting the round-trip is byte-exact for text and
+  binary files alike, and that a `.gitignore`d file keeps its *post*-checkpoint
+  contents, since ignored paths are outside both the snapshot and the restore.
+  Needs `git`, nothing else.
 - **`record-session.ts`** (`npm run record`) — runs the *production*
   `ChatController` against a live agent (with the `vscode` module stubbed via
   `harness/vscode-stub.ts`) and writes the exact `HostMessage` stream the
@@ -625,6 +717,20 @@ Code host:
     webviews bind to a *surface* (following or pinned) instead of a controller,
     which is what lets the sidebar and N editor panels watch different sessions
     simultaneously.
+11. **`run_tests` spawns the project's own runner; `vscode.tests` cannot do this.**
+    The testing API only lets an extension run tests *it* owns, through its own
+    `TestController`. There is no public API to enumerate another extension's test
+    items, invoke its controller, or read its results — so the API cannot run this
+    workspace's real suite. That is a hard API limit, not a preference; the header
+    of `src/ide/tools/tasks.ts` already makes the same argument for `run_task`.
+    `run_tests` inherits it and buys the structure back a level lower, by invoking
+    each framework's machine-readable reporter instead of scraping a terminal.
+12. **Checkpoints live in the extension, not in omp.** omp's `checkpoint`/`rewind`
+    tools operate on the conversation only — they do not snapshot the work tree,
+    despite what the tool's own summary string says — and omp's default approval
+    mode is `yolo`. So the front-end is the only place a file-level undo can exist
+    today, and it owns one (§6.11), built from git plumbing that never touches
+    HEAD, the index, or a branch.
 
 ---
 ## 10. Sequence: A Prompt Round-Trip
@@ -680,6 +786,10 @@ All settings live under the `omp.` namespace (`package.json` →
 - **Activation-time:** `ideBridge.enabled`. The bridge's socket is created and
   registered during activation, so a change prompts a *window reload* rather than
   an agent restart.
+- **Read on use:** `checkpoints.enabled` gates the pre-turn work-tree snapshot
+  (§6.11) and `testFramework` picks the runner `run_tests` invokes when
+  auto-detection should be overridden. Neither is a launch argument or part of the
+  bridge's registration, so a change needs no restart and no reload.
 
 `src/chat/controller.ts:readUiConfig()` reads the UI-affecting subset and is
 included in every `snapshot` under `config`.
