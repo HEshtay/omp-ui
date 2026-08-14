@@ -7,6 +7,8 @@
  * loudly rather than silently returning a plausible value.
  */
 
+import { stat as statOnDisk } from "node:fs/promises";
+
 const CONFIG: Record<string, unknown> = {
 	executablePath: process.env.OMP_PATH ?? "omp",
 	extraArgs: ["--no-session"],
@@ -75,6 +77,12 @@ export const workspace = {
 		readFile: () => {
 			throw new Error("fs.readFile is not available in the harness");
 		},
+		// Implemented for real: the controller asks whether a path is a directory
+		// before opening it, and only the actual filesystem can answer that.
+		stat: async (uri: { fsPath: string }) => {
+			const found = await statOnDisk(uri.fsPath);
+			return { type: found.isDirectory() ? FileType.Directory : FileType.File };
+		},
 	},
 };
 
@@ -106,9 +114,15 @@ export const env = {
 	clipboard: { writeText: async () => undefined },
 };
 
+/** Commands are recorded rather than run, so tests can assert what was invoked. */
+const executed: Array<{ command: string; args: unknown[] }> = [];
+
 export const commands = {
 	registerCommand: () => new Disposable(() => {}),
-	executeCommand: async () => undefined,
+	executeCommand: async (command: string, ...args: unknown[]) => {
+		executed.push({ command, args });
+		return undefined;
+	},
 };
 
 export class Position {
@@ -129,6 +143,8 @@ export class Selection extends Range {}
 
 export const TextEditorRevealType = { InCenterIfOutsideViewport: 2 };
 
+export const FileType = { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 };
+
 function createLogChannel() {
 	const write = (level: string, message: string) => {
 		if (process.env.HARNESS_VERBOSE) console.log(`[${level}] ${message}`);
@@ -145,4 +161,4 @@ function createLogChannel() {
 	};
 }
 
-export const harness = { createLogChannel, CONFIG };
+export const harness = { createLogChannel, CONFIG, executed };

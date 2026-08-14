@@ -29,6 +29,9 @@ jobs:
 
       - run: npm run smoke:tests
 
+      # Reads only this repo's own tree.
+      - run: npm run smoke:openfile
+
       # Creates its own throwaway repo and configures an identity in it, so it
       # needs nothing from the runner but `git`.
       - run: npm run smoke:checkpoint

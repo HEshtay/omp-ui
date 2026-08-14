@@ -37,6 +37,7 @@ jobs:
       # that CI would have rejected.
       - run: npm run smoke:ide
       - run: npm run smoke:tests
+      - run: npm run smoke:openfile
       - run: npm run smoke:checkpoint
       - run: npm run package
 

@@ -664,6 +664,15 @@ Code host:
   binary files alike, and that a `.gitignore`d file keeps its *post*-checkpoint
   contents, since ignored paths are outside both the snapshot and the restore.
   Needs `git`, nothing else.
+- **`smoke-open-file.ts`** (`npm run smoke:openfile`) — drives the `openFile`
+  webview message through the production `ChatController` (with the `vscode`
+  module stubbed) against this repo's own tree. Transcript path links are not all
+  files — a `read` of a directory, a glob row and a grep `# dir` header all post
+  a directory — and `openTextDocument` rejects those, so the dispatch catch used
+  to turn a click into an error toast. Asserts a directory (with or without a
+  trailing separator, with or without a line number) goes to `revealInExplorer`
+  and raises no toast, while a file and a missing path still take the document
+  path. No agent process: `openFile` never touches the RPC client.
 - **`record-session.ts`** (`npm run record`) — runs the *production*
   `ChatController` against a live agent (with the `vscode` module stubbed via
   `harness/vscode-stub.ts`) and writes the exact `HostMessage` stream the

@@ -123,6 +123,7 @@ npm run smoke:sessions   # multi-session / multi-project behaviour
 npm run smoke:ide        # IDE bridge: real socket, real MCP shim, degraded mode
 npm run smoke:tests      # test-reporter parsing, one recorded payload per format
 npm run smoke:checkpoint # snapshot/restore round-trip in a throwaway git repo
+npm run smoke:openfile   # transcript path links: directories reveal, files open
 ```
 
 `smoke` and `smoke:sessions` spawn a real `omp` binary, so they need the CLI
@@ -135,6 +136,9 @@ the six reporter formats behind the seven supported frameworks, and asserts a
 malformed one yields nothing rather than a fake pass. `smoke:checkpoint` creates a
 real temporary git repository and asserts the snapshot/restore round-trip is
 byte-exact — binary files included, `.gitignore`d paths deliberately excluded.
+`smoke:openfile` is offline as well: it drives the `openFile` webview message
+against this repo's own tree and asserts a directory is revealed in the Explorer
+while a file still opens as a document.
 
 ## Layout
 

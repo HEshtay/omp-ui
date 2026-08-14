@@ -1078,12 +1078,23 @@ export class ChatController implements vscode.Disposable {
     }
   }
 
+  /**
+   * Not every path link in the transcript is a file: a `read` of a directory, a
+   * glob row, and a grep's `# dir` header all hand us one, and
+   * `openTextDocument` rejects those outright ("that is actually a directory").
+   * A directory's editor equivalent is the Explorer, so reveal it there —
+   * `line`/`column` cannot apply and are ignored.
+   */
   async openFile(
     target: string,
     line?: number,
     column?: number,
   ): Promise<void> {
-    const uri = vscode.Uri.file(target);
+    const uri = vscode.Uri.file(withoutTrailingSeparator(target));
+    if (await isDirectory(uri)) {
+      await vscode.commands.executeCommand("revealInExplorer", uri);
+      return;
+    }
     const document = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(document, {
       preview: true,
@@ -1285,4 +1296,27 @@ function describe(error: unknown): string {
   if (isRecord(error) && typeof error.message === "string")
     return error.message;
   return String(error);
+}
+
+/**
+ * Directory listings mark their entries with a trailing separator (`tools/`),
+ * which no editor URI carries and which would stop the Explorer matching the
+ * node. A root keeps its own: `/` and `c:\` *are* the separator.
+ */
+function withoutTrailingSeparator(target: string): string {
+  const trimmed = target.replace(/[\\/]+$/, "");
+  return trimmed.length === 0 || /^[A-Za-z]:$/.test(trimmed) ? target : trimmed;
+}
+
+/**
+ * A missing or unreadable path is reported as "not a directory" so the open
+ * below produces VS Code's own diagnosis rather than one invented here.
+ */
+async function isDirectory(uri: vscode.Uri): Promise<boolean> {
+  try {
+    const stat = await vscode.workspace.fs.stat(uri);
+    return (stat.type & vscode.FileType.Directory) !== 0;
+  } catch {
+    return false;
+  }
 }

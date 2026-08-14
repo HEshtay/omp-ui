@@ -359,6 +359,7 @@
     "smoke:ide": "esbuild scripts/smoke-ide-bridge.ts --bundle --platform=node --target=node20 --format=cjs --alias:vscode=./scripts/harness/vscode-stub.ts --outfile=dist/smoke-ide-bridge.cjs && node dist/smoke-ide-bridge.cjs",
     "smoke:tests": "esbuild scripts/smoke-tests-tool.ts --bundle --platform=node --target=node20 --format=cjs --alias:vscode=./scripts/harness/vscode-stub.ts --outfile=dist/smoke-tests-tool.cjs && node dist/smoke-tests-tool.cjs",
     "smoke:checkpoint": "esbuild scripts/smoke-checkpoint.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/smoke-checkpoint.cjs && node dist/smoke-checkpoint.cjs",
+    "smoke:openfile": "esbuild scripts/smoke-open-file.ts --bundle --platform=node --target=node20 --format=cjs --alias:vscode=./scripts/harness/vscode-stub.ts --outfile=dist/smoke-open-file.cjs && node dist/smoke-open-file.cjs",
     "package": "npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build"
   },
